@@ -22,10 +22,10 @@ public class BitwareSQL {
         }
     }
 
-    public void CompararBanco(Integer idMaquina, String enderecoMac, Integer fkEmpresa) {
+    public boolean CompararBanco(Integer idMaquina, String enderecoMac, Integer fkEmpresa) {
         if (conn == null) {
             System.out.println("Conexão com o banco não inicializada!!!!!!!!!!");
-            return;
+            return(false);
         }
         try {
             String sqlSelect = "SELECT * FROM Maquina WHERE idMaquina = ? and enderecoMac = ? and fkEmpresa = ?;";
@@ -39,18 +39,22 @@ public class BitwareSQL {
 
             if (rs.next()) {
                 System.out.println("Máquina com o endereço mac "+enderecoMac+" existe no banco de dados!!!!!\n\n");
+                rs.close();
+                ps.close();
+                return(true);
 //                System.out.println("Maquina encontrada:");
 //                System.out.printf("MÁQUINA QUE EXISTE: | id da máquina: %d | endereço MAC: %s | id da empresa: %d",
 //                        rs.getInt("idMaquina"),  rs.getString("enderecoMac"),  rs.getInt("fkEmpresa"));
             } else {
                 System.out.println("Máquina com o endereço mac " +enderecoMac+ " não encontrada!!!!!!\n\n");
+                rs.close();
+                ps.close();
+                return(false);
             }
-
-            rs.close();
-            ps.close();
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("Ocorreu um erro ao tentar selecionar a máquina!!!!!!!!!");
+            return(false);
         }
     }
 }
