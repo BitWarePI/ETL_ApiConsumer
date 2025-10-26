@@ -14,6 +14,8 @@ public class BitwareSQL {
             // MUDAR AQUIIII NA HORA DE TESTARRR!!!!!!!!!!!!!
             String user = "aluno";
             String password = "123456";
+//            String user = "bitware";
+//            String password = "sptech";
 
             this.conn = DriverManager.getConnection(url, user, password);
             System.out.println("Conectado ao MySQL com sucesso!!!!!!!!!!!!!!!");
@@ -28,25 +30,27 @@ public class BitwareSQL {
             return(false);
         }
         try {
-            String sqlSelect = "SELECT * FROM Maquina WHERE idMaquina = ? and enderecoMac = ? and fkEmpresa = ?;";
+            String sqlSelect = "SELECT maquina.idMaquina, maquina.enderecoMac, empresa.nome FROM bitware_db.Maquina as maquina INNER JOIN \n" +
+                    " bitware_db.Empresa as empresa ON maquina.fkEmpresa = empresa.idEmpresa WHERE enderecoMac = ?;";
             PreparedStatement ps = conn.prepareStatement(sqlSelect);
 
-            ps.setString(1, idMaquina.toString());
-            ps.setString(2, enderecoMac);
-            ps.setString(3, fkEmpresa.toString());
+
+            ps.setString(1, enderecoMac.toString());
 
             ResultSet rs = ps.executeQuery();
 
             if (rs.next()) {
-                System.out.println("Máquina com o endereço mac "+enderecoMac+" existe no banco de dados!!!!!\n\n");
+                int idMaquinaQuery = rs.getInt("idMaquina");
+                String nomeEmpresaQuery = rs.getString("nome");
+
+                System.out.println("Máquina com o endereço MAC " + enderecoMac + " existe no banco de dados!");
+                System.out.println("ID da máquina: " + idMaquinaQuery);
+                System.out.println("Pertence à empresa: " + nomeEmpresaQuery);
+                System.out.println();
                 rs.close();
                 ps.close();
                 return(true);
-//                System.out.println("Maquina encontrada:");
-//                System.out.printf("MÁQUINA QUE EXISTE: | id da máquina: %d | endereço MAC: %s | id da empresa: %d",
-//                        rs.getInt("idMaquina"),  rs.getString("enderecoMac"),  rs.getInt("fkEmpresa"));
             } else {
-                System.out.println("Máquina com o endereço mac " +enderecoMac+ " não encontrada!!!!!!\n\n");
                 rs.close();
                 ps.close();
                 return(false);

@@ -22,6 +22,10 @@ public class Maquina {
         this.fkEmpresa = fkEmpresa;
     }
 
+    public Maquina(String enderecoMac) {
+        this.enderecoMac = enderecoMac;
+    }
+
     public Integer getId() {
         return id;
     }
@@ -51,7 +55,7 @@ public class Maquina {
         String nomeArquivo = "src/leituras.csv";
         //parte para quebrar as colunas do csv pra pegar so o endereco mac
         String separador = ";";
-        //ramdom para adicionar o id nas maquinas que podem ou nao bater com oq ta no banco
+        //random para adicionar o id nas maquinas que podem ou nao bater com oq ta no banco
         Random random = new Random();
         BitwareSQL banco = new BitwareSQL();
         List<Maquina> maquinasValidadas = new ArrayList<>();
@@ -64,12 +68,7 @@ public class Maquina {
                 String[] dados = linha.split(separador);
 
                 String enderecoMac = dados[8];
-                int idMaquina = random.nextInt(10) + 1; // id entre 1 e 10
-                int fkEmpresa = 1;
-
-                Maquina maquina = new Maquina(idMaquina, enderecoMac, fkEmpresa);
-                System.out.printf("Máquina com o id: %d | Endereço MAC: %s | id da empresa: %d%n",
-                        maquina.getId(), maquina.getEnderecoMac(), maquina.getFkEmpresa());
+                Maquina maquina = new Maquina(enderecoMac);
 
                 boolean existe = banco.CompararBanco(maquina.getId(), maquina.getEnderecoMac(), maquina.getFkEmpresa());
                 if(existe){
