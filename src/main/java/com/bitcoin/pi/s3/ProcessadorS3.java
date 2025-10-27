@@ -22,14 +22,17 @@ public class ProcessadorS3 {
 
         Region regiao = Region.US_EAST_1;
 
-        // Selecione o bucket que você vai utilizar
+        // Seleciona o bucket que você vai utilizar
         String nomeBucket = "amzn-bitware-v1";
 
-        // O selecione o caminho completo do arquivo que vamos LER
+        // Seleciona o caminho completo do arquivo de leitura
         String chaveArquivoLeitura = "dados/leituras.csv";
 
-        // O nome/caminho completo do arquivo que você quer ESCREVER
+        // Seleciona o caminho completo do arquivo de escrita
         String chaveArquivoEscrita = "dados-tratados/relatorio_tratado.csv";
+
+        // Selecione o caminho para o arquivo que vai guardar os erros
+        String chaveArquivoErros = "dados-erros/relatorio_de_erros.csv";
 
 
         // 2. Iniciando o Bucket
@@ -52,10 +55,15 @@ public class ProcessadorS3 {
 
             StringBuilder conteudoTratado = new StringBuilder();
 
-            // NOVO: Contador de linha para sabermos o cabeçalho e logar erros
+            // StringBuilder para guardar as linhas com erro
+            StringBuilder conteudoErros = new StringBuilder();
+            // Adiciona um cabeçalho ao arquivo de erros para o Jira
+            conteudoErros.append("NumeroLinha;MotivoErro;LinhaOriginal\n");
+
+
+            // Contador de linha para sabermos o cabeçalho e logar erros
             int numeroLinha = 0;
 
-            // ATUALIZADO: try-with-resources com charset UTF-8
             try (ResponseInputStream<GetObjectResponse> s3InputStream = s3.getObject(getRequest);
                  BufferedReader reader = new BufferedReader(new InputStreamReader(s3InputStream, StandardCharsets.UTF_8))) {
 
@@ -63,7 +71,7 @@ public class ProcessadorS3 {
                 while ((linha = reader.readLine()) != null) {
                     numeroLinha++;
 
-                    // NOVO: Lógica para pular o cabeçalho (linha 1)
+                    // Lógica para pular o cabeçalho (linha 1)
                     // Nós adicionamos o cabeçalho ao arquivo de saída e pulamos a validação
                     if (numeroLinha == 1) {
                         conteudoTratado.append(linha).append("\n");
@@ -73,7 +81,6 @@ public class ProcessadorS3 {
                     // --- 4. TRATAMENTO E VALIDAÇÃO ---
                     // ATUALIZADO: Bloco try-catch para validar cada linha
                     try {
-                        // O método validarLinhaCsv vai fazer o trabalho sujo
                         // Se a linha for válida, ela é retornada
                         String linhaValidada = validarLinhaCsv(linha, numeroLinha);
 
@@ -85,6 +92,17 @@ public class ProcessadorS3 {
                         // Nós registramos o erro e pulamos a linha
                         // O processamento continua para as próximas linhas.
                         System.err.println("ERRO: Linha " + numeroLinha + " pulada. Motivo: " + e.getMessage());
+
+                        // Guarda a informação do erro na StringBuilder de erros
+                        // Remove quebras de linha da 'linha' original para não quebrar o CSV de erro
+                        String linhaOriginalFormatada = linha.replace("\n", " ").replace("\r", " ");
+
+                        conteudoErros.append(numeroLinha)
+                                .append(";")
+                                .append(e.getMessage()) // Motivo do erro
+                                .append(";")
+                                .append(linhaOriginalFormatada) // A linha exata que falhou
+                                .append("\n");
                     }
                 }
             }
@@ -93,24 +111,43 @@ public class ProcessadorS3 {
 
             // ATUALIZADO: Verifica se o 'conteudoTratado' tem mais do que apenas o cabeçalho
             if (numeroLinha <= 1) {
-                System.out.println("Aviso: O arquivo lido estava vazio ou continha apenas o cabeçalho.");
-                return;
+                System.out.println("Aviso: O arquivo lido estava vazio ou continha apenas o cabeçalho. Nenhum dado tratado foi salvo.");
+            } else {
+                // --- 5. ESCRITA (UPLOAD) ---
+                System.out.println("Iniciando upload do arquivo tratado para: " + chaveArquivoEscrita);
+
+                PutObjectRequest putRequest = PutObjectRequest.builder()
+                        .bucket(nomeBucket)
+                        .key(chaveArquivoEscrita)
+                        .contentType("text/csv") // Boa prática
+                        .build();
+
+                // Converte o StringBuilder para bytes e envia
+                s3.putObject(putRequest,
+                        RequestBody.fromString(conteudoTratado.toString(), StandardCharsets.UTF_8));
+
+                System.out.println("Upload do arquivo tratado concluído com sucesso!");
             }
 
-            // --- 5. ESCRITA (UPLOAD) ---
-            System.out.println("Iniciando upload do arquivo tratado para: " + chaveArquivoEscrita);
+            // Bloco para salvar o arquivo de ERROS
+            // Verifica se a StringBuilder de erros tem mais do que o cabeçalho
+            if (conteudoErros.length() > "NumeroLinha;MotivoErro;LinhaOriginal\n".length()) {
+                System.out.println("Iniciando upload do relatório de erros para: " + chaveArquivoErros);
 
-            PutObjectRequest putRequest = PutObjectRequest.builder()
-                    .bucket(nomeBucket)
-                    .key(chaveArquivoEscrita)
-                    .contentType("text/csv") // Boa prática
-                    .build();
+                PutObjectRequest putErrosRequest = PutObjectRequest.builder()
+                        .bucket(nomeBucket)
+                        .key(chaveArquivoErros)
+                        .contentType("text/csv")
+                        .build();
 
-            // Converte o StringBuilder para bytes e envia
-            s3.putObject(putRequest,
-                    RequestBody.fromString(conteudoTratado.toString(), StandardCharsets.UTF_8));
+                s3.putObject(putErrosRequest,
+                        RequestBody.fromString(conteudoErros.toString(), StandardCharsets.UTF_8));
 
-            System.out.println("Upload concluído com sucesso!");
+                System.out.println("Upload do relatório de erros concluído!");
+            } else {
+                System.out.println("Nenhum erro de validação encontrado. Arquivo de erros não foi gerado.");
+            }
+
 
         } catch (S3Exception e) {
             // Trata erros específicos da AWS (Acesso Negado, Arquivo Não Encontrado)
@@ -129,6 +166,7 @@ public class ProcessadorS3 {
             }
         }
     }
+
     private static String validarLinhaCsv(String linha, int numeroLinha) throws ValidacaoCsvException {
 
         // 1. Verifica se a linha inteira está em branco (null, "" e " ")
