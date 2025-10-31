@@ -50,12 +50,10 @@ public class BitwareSQL {
             ResultSet rs = ps.executeQuery();
 
             if (rs.next()) {
-              //  int idMaquinaQuery = rs.getInt("idMaquina");
                 int fkEmpresaQuery = rs.getInt("fkEmpresa");
                 String nomeEmpresaQuery = rs.getString("nome");
 
                 System.out.println("Máquina com o endereço MAC " + enderecoMac + " existe no banco de dados!");
-               // System.out.println("ID da máquina: " + idMaquinaQuery);
                 System.out.println("Pertence à empresa (id): " + fkEmpresaQuery + " - " + nomeEmpresaQuery);
                 System.out.println();
                 rs.close();
