@@ -72,4 +72,15 @@ public class BitwareSQL {
             return 0;
         }
     }
+    public void close() {
+        try {
+            if (conn != null && !conn.isClosed()) {
+                conn.close();
+                System.out.println("Conexão MySQL fechada.");
+            }
+        } catch (java.sql.SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
 }

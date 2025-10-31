@@ -22,7 +22,8 @@ public class Maquina {
     private Double tempGpu;
     private Double tempCpu;
 
-    public Maquina() {}
+    public Maquina() {
+    }
 
     // Construtor completo (opcional, mas bom para ter)
     public Maquina(Integer id, String enderecoMac, Integer fkEmpresa,
@@ -134,7 +135,6 @@ public class Maquina {
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(new FileInputStream(arquivoEntrada), StandardCharsets.UTF_8))) {
 
-            // Pula o cabeçalho
             reader.readLine();
 
             String linha;
@@ -161,7 +161,6 @@ public class Maquina {
                 int fkEmpresa = banco.CompararBanco(enderecoMac);
 
                 if (fkEmpresa > 0) {
-                    // Se CompararBanco retornou true, o csv foi preenchido.
                     maquinasValidadas.add(maquina);
                     maquina.setFkEmpresa(fkEmpresa);
                 } else {
@@ -178,7 +177,6 @@ public class Maquina {
         }
     }
 
-    // --- ESCREVER CSV ---
     private void escreverCsvValidado(String nomeArquivo, List<Maquina> maquinas, String separador) {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(nomeArquivo))) {
 

@@ -1,4 +1,4 @@
-package com.bitcoin.pi.s3;
+package com.bitcoin.pi;
 
 public class ValidacaoCsvException extends Exception {
 
