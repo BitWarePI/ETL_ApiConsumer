@@ -163,8 +163,9 @@ public class Maquina {
                 if (fkEmpresa > 0) {
                     maquinasValidadas.add(maquina);
                     maquina.setFkEmpresa(fkEmpresa);
+                    System.out.println("Máquina encontrada!");
                 } else {
-                    System.out.println("Máquina ignorada (não encontrada no banco): " + enderecoMac);
+                    System.out.println("Máquina ignorada (não encontrada no banco)");
                 }
             }
 
@@ -193,6 +194,8 @@ public class Maquina {
                         m.getEnderecoMac() + separador +
                         m.getFkEmpresa());
                 writer.newLine();
+
+                System.out.println("Novo csv validado!");
             }
 
         } catch (IOException e) {

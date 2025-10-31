@@ -12,13 +12,13 @@ public class BitwareSQL {
             String url = "jdbc:mysql://localhost:3306/bitware_db";
 
             // MUDAR AQUIIII NA HORA DE TESTARRR!!!!!!!!!!!!!
-//            String user = "aluno";
-//            String password = "123456";
-            String user = "bitware";
-            String password = "sptech";
+            String user = "aluno";
+            String password = "123456";
+  //          String user = "bitware";
+   //         String password = "sptech";
 
             this.conn = DriverManager.getConnection(url, user, password);
-            System.out.println("Conectado ao MySQL com sucesso!!!!!!!!!!!!!!!");
+            System.out.println("Conectado ao MySQL com sucesso!");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -26,7 +26,7 @@ public class BitwareSQL {
 
     public int CompararBanco(String enderecoMac) {
         if (conn == null) {
-            System.out.println("Conexão com o banco não inicializada!!!!!!!!!!");
+            System.out.println("Conexão com o banco não inicializada!");
             return 0;
         }
         try {
@@ -66,7 +66,7 @@ public class BitwareSQL {
             }
         } catch (Exception e) {
             e.printStackTrace();
-            System.out.println("Ocorreu um erro ao tentar selecionar a máquina!!!!!!!!!");
+            System.out.println("Ocorreu um erro ao tentar selecionar a máquina!");
             return 0;
         }
     }
