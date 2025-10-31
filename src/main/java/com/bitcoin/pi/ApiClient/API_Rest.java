@@ -7,10 +7,7 @@ import java.net.http.HttpResponse;
 import java.util.Base64;
 
 public class API_Rest {
-    public static void main(String[] args) {
-        ApiConsumer();
-    }
-    protected static void ApiConsumer(){
+    public static void ApiConsumer(){
         try {
             // Valores a serem usados
             String email = "bitwarepi@gmail.com";

@@ -1,5 +1,6 @@
 package com.bitcoin.pi;
 
+import com.bitcoin.pi.ApiClient.API_Rest;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
@@ -22,11 +23,11 @@ public class ProcessadorS3 {
     private static final int COLUNAS_PROCESSO = 6;
 
     public static void main(String[] args) {
-
+        API_Rest.ApiConsumer();
         Region regiao = Region.US_EAST_1;
 
-        String bucketRaw = "bitware-bucket-raw";
-        String bucketTrusted = "bitware-bucket-trusted";
+        String bucketRaw = "s3-raw-bitwarepi";
+        String bucketTrusted = "s3-client-bitwarepi";
 
         String chaveLeituras = "dados/leituras.csv";
         String chaveProcessos = "dados/processos.csv";

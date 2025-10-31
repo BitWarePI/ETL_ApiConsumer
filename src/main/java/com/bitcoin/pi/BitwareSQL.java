@@ -1,8 +1,9 @@
 package com.bitcoin.pi;
 
-import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 
 public class BitwareSQL {
     private Connection conn;
@@ -12,10 +13,10 @@ public class BitwareSQL {
             String url = "jdbc:mysql://localhost:3306/bitware_db";
 
             // MUDAR AQUIIII NA HORA DE TESTARRR!!!!!!!!!!!!!
-            String user = "aluno";
-            String password = "123456";
-  //          String user = "bitware";
-   //         String password = "sptech";
+           // String user = "root";
+         //   String password = "Home27659317@";
+              String user = "bitware";
+              String password = "sptech";
 
             this.conn = DriverManager.getConnection(url, user, password);
             System.out.println("Conectado ao MySQL com sucesso!");
