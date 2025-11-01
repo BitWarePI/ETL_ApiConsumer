@@ -11,9 +11,9 @@ public class API_Rest {
         try {
             // Valores a serem usados
             String email = "bitwarepi@gmail.com";
-            String token = "ATATT3xFfGF0SBes5hZbJwMBi1LFyyoofJ0asJgzfl5YS7XnS0Bm0" +
-                    "_slNWU7Ud2Qu2yNhuU_n1g5cm-Fr5Yw649uHnkdohw3f7vHTuckP4C3J7" +
-                    "5RmUBP4H71KZJUOxyLKUdaZdwAZ49IfrGMLdlRst2KPR4IOPJMWviqcONVPdQpuDV5_bYTciY=7DC91FB6";
+            String token = "ATATT3xFfGF0bZcRrel-kCKKusKH4uywBSqEZFKPthnrXLeTpKd" +
+                    "hips8op9g3Bh_DBjV7f-ISuhE38MX9yExH6Hg_5tIWSEAxrm3O9gZZm36g2ZBdScIFfMrhqZnCwmk" +
+                    "q8a1kxjWWxsCcvmWYOH5E-3fvz3BjpH5502wl-M_3FoJlBYJhDkJ2fw=BAED5BC2";
             String authentic = email + ":" + token;
             String encodedAuth = Base64.getEncoder().encodeToString(authentic.getBytes());
 

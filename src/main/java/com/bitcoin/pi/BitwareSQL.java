@@ -10,7 +10,7 @@ public class BitwareSQL {
 
     public BitwareSQL() {
         try {
-            String url = "jdbc:mysql://localhost:3306/bitware_db";
+            String url = "jdbc:mysql://44.210.193.181:3306/bitware_db";
 
             // MUDAR AQUIIII NA HORA DE TESTARRR!!!!!!!!!!!!!
            // String user = "root";
