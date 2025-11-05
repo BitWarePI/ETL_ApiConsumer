@@ -40,10 +40,10 @@ public class ProcessadorS3 {
         System.out.println("Cliente S3 iniciado.");
         BitwareSQL banco = new BitwareSQL();
 
-        Map<String, LeituraComProcessos> dadosMapeados = new HashMap<>();
 
         StringBuilder conteudoSaidaFinal = new StringBuilder();
         StringBuilder conteudoErrosLeituras = new StringBuilder();
+        Map<String, LeituraComProcessos> dadosMapeados = new HashMap<>();
         StringBuilder conteudoErrosProcessos = new StringBuilder();
 
         conteudoErrosLeituras.append("NumeroLinha;MotivoErro;LinhaOriginal\n");
