@@ -7,6 +7,7 @@ import java.net.http.HttpResponse;
 import java.util.Base64;
 
 public class API_Rest {
+
     public static void ApiConsumer(){
         try {
             // Valores a serem usados
@@ -19,31 +20,31 @@ public class API_Rest {
 
             // Corpo (json)
             String bodyJson = """
-                    {
-                      "fields": {
-                        "project": { "key": "KAN" },
-                        "summary": "Chamado com prioridade máxima.",
-                        "description": {
-                          "type": "doc",
-                          "version": 1,
+                {
+                  "fields": {
+                    "project": { "key": "KAN" },
+                    "summary": "Chamado com prioridade máxima.",
+                    "description": {
+                      "type": "doc",
+                      "version": 1,
+                      "content": [
+                        {
+                          "type": "paragraph",
                           "content": [
                             {
-                              "type": "paragraph",
-                              "content": [
-                                {
-                                  "type": "text",
-                                  "text": "Chamado criado automaticamente via API Java"
-                                }
-                              ]
+                              "type": "text",
+                              "text": "Chamado criado automaticamente via API Java"
                             }
                           ]
-                        },
-                        "issuetype": { "id": "10010" },
-                        "priority": { "id": "1"},
-                        "assignee": { "accountId": "712020:915358ff-e758-48c8-ab6d-5d66f8fe0603" }
-                      }
-                    }
-                    """;
+                        }
+                      ]
+                    },
+                    "issuetype": { "id": "10010" },
+                    "priority": { "id": "1"},
+                    "assignee": { "accountId": "712020:915358ff-e758-48c8-ab6d-5d66f8fe0603" }
+                  }
+                }
+                """;
 
             // Criando Client & Requesição
             HttpClient client = HttpClient.newHttpClient();
@@ -66,4 +67,5 @@ public class API_Rest {
         }
 
     }
+
 }
