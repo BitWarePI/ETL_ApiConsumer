@@ -24,6 +24,13 @@ public class ProcessadorS3 {
 
         S3Client s3 = S3Client.builder().region(regiao).build();
         BitwareDatabase banco = new BitwareDatabase();
+      
+        System.out.println("Cliente S3 iniciado.");
+
+        StringBuilder conteudoSaidaFinal = new StringBuilder();
+        StringBuilder conteudoErrosLeituras = new StringBuilder();
+        Map<String, LeituraComProcessos> dadosMapeados = new HashMap<>();
+        StringBuilder conteudoErrosProcessos = new StringBuilder();
 
         String pathLeiturasRaw = "dados/leituras.csv";
         String pathLeiturasTrusted = "dados/LeiturasTRUSTED.csv";
