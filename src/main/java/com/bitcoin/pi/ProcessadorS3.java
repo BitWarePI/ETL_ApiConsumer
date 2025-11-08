@@ -1,250 +1,136 @@
 package com.bitcoin.pi;
 
-import com.bitcoin.pi.ApiClient.API_Rest;
-import software.amazon.awssdk.core.ResponseInputStream;
-import software.amazon.awssdk.core.sync.RequestBody;
+import com.bitcoin.pi.api.JiraClient;
+import com.bitcoin.pi.db.BitwareDatabase;
+import com.bitcoin.pi.etl.CarregadorS3;
+import com.bitcoin.pi.etl.ExtratorS3;
+import com.bitcoin.pi.etl.AlertGenerator;
+import com.bitcoin.pi.etl.ValidadorLeituras;
+import com.bitcoin.pi.etl.TrustedWriter;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.S3Exception;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 public class ProcessadorS3 {
 
-    private static final int COLUNAS_LEITURA = 9;
-    private static final int COLUNAS_PROCESSO = 6;
-
     public static void main(String[] args) {
-        API_Rest.ApiConsumer();
         Region regiao = Region.US_EAST_1;
-
         String bucketRaw = "s3-raw-bitwarepi";
-        String bucketTrusted = "s3-client-bitwarepi";
-
-        String chaveLeituras = "dados/leituras.csv";
-        String chaveProcessos = "dados/processos.csv";
-
-        String chaveSaidaTrusted = "dados-enriquecidos/maquinas_com_top10_processos.csv";
-        String chaveErrosLeituras = "dados-erros/erros_leituras.csv";
-        String chaveErrosProcessos = "dados-erros/erros_processos.csv";
+        String bucketTrusted = "s3-trusted-bitwarepi";
+        String bucketClient = "s3-client-bitwarepi";
 
         S3Client s3 = S3Client.builder().region(regiao).build();
+        BitwareDatabase banco = new BitwareDatabase();
+      
         System.out.println("Cliente S3 iniciado.");
-        BitwareSQL banco = new BitwareSQL();
-
 
         StringBuilder conteudoSaidaFinal = new StringBuilder();
         StringBuilder conteudoErrosLeituras = new StringBuilder();
         Map<String, LeituraComProcessos> dadosMapeados = new HashMap<>();
         StringBuilder conteudoErrosProcessos = new StringBuilder();
 
-        conteudoErrosLeituras.append("NumeroLinha;MotivoErro;LinhaOriginal\n");
-        conteudoErrosProcessos.append("NumeroLinha;MotivoErro;LinhaOriginal\n");
+        String pathLeiturasRaw = "dados/leituras.csv";
+        String pathLeiturasTrusted = "dados/LeiturasTRUSTED.csv";
+        String pathErrosLeituras = "dados-erros/erros_leituras.csv";
 
         try {
-            System.out.println("Iniciando Passo 1: Lendo e validando " + chaveLeituras);
+            ExtratorS3 extrator = new ExtratorS3(s3, bucketRaw);
+            ValidadorLeituras validador = new ValidadorLeituras();
 
-            GetObjectRequest getLeiturasRequest = GetObjectRequest.builder()
-                    .bucket(bucketRaw).key(chaveLeituras).build();
+            System.out.println("Baixando leituras do RAW...");
+            List<String> linhasRaw = extrator.baixarArquivo(pathLeiturasRaw);
 
-            try (ResponseInputStream<GetObjectResponse> s3Stream = s3.getObject(getLeiturasRequest);
-                 BufferedReader reader = new BufferedReader(new InputStreamReader(s3Stream, StandardCharsets.UTF_8))) {
+            System.out.println("Tratando leituras (validação)...");
+            List<String> linhasValidas = validador.tratarLinhasRaw(linhasRaw);
+            String relErros = validador.getRelatorioErros();
 
-                String linha;
-                int numeroLinha = 0;
-                while ((linha = reader.readLine()) != null) {
-                    numeroLinha++;
-                    if (numeroLinha == 1) continue;
+            // grava erros - aqui salvamos no trusted erros para envio posterior
+            TrustedWriter trustedWriter = new TrustedWriter(s3, bucketTrusted);
+            if (!relErros.isEmpty() && !relErros.equals("NumeroLinha;MotivoErro;LinhaOriginal\n")) {
+                trustedWriter.escreverConteudo(pathErrosLeituras, relErros);
+                System.out.println("Erros escritos em: " + pathErrosLeituras);
+            } else {
+                System.out.println("Nenhum erro de leitura detectado.");
+            }
 
-                    try {
-                        Leitura leituraValidada = validarLeitura(linha, numeroLinha, banco);
+            // grava LeiturasTRUSTED.csv no bucket trusted
+            trustedWriter.escreverTrusted(pathLeiturasTrusted, linhasValidas);
+            System.out.println("Arquivo Trusted escrito: " + pathLeiturasTrusted);
 
-                        String chave = leituraValidada.getMacAddress() + "_" + leituraValidada.getDatetime();
-                        dadosMapeados.put(chave, new LeituraComProcessos(leituraValidada));
+            // Processamento: lendo do Trusted
+            System.out.println("Lendo do Trusted para gerar chamados e arquivos por empresa...");
+            List<String> linhasTrusted = extrator.baixarArquivoFromBucket(bucketTrusted, pathLeiturasTrusted);
 
-                    } catch (ValidacaoCsvException e) {
-                        System.err.println("ERRO [leituras.csv] Linha " + numeroLinha + ": " + e.getMessage());
-                        String linhaOriginal = linha.replace("\n", " ").replace("\r", " ");
-                        conteudoErrosLeituras.append(numeroLinha).append(";")
-                                .append(e.getMessage()).append(";")
-                                .append(linhaOriginal).append("\n");
-                    }
+            // gerar motivo de chamado para cada linha e acumular por empresa
+            AlertGenerator alertGenerator = new AlertGenerator(banco);
+
+            // gerar LeiturasCLIENT.csv por empresa
+            // aqui vamos criar map de conteúdo por empresa
+            Map<Integer, List<String>> leiturasPorEmpresa = alertGenerator.processarTrustedEGerarChamados(linhasTrusted);
+
+            // Upload client por empresa(id)/data
+            CarregadorS3 carregador = new CarregadorS3(s3, bucketClient);
+            LocalDate hoje = LocalDate.now();
+
+            for (Map.Entry<Integer, List<String>> entry : leiturasPorEmpresa.entrySet()) {
+                Integer idEmpresa = entry.getKey();
+                List<String> linhas = entry.getValue();
+
+                // montar LeiturasCLIENT.csv (cabecalho + linhas com motivo)
+                String header = "datetime;cpu_percent;gpu_percent;cpu_temperature;gpu_temperature;motivo_chamado;id_empresa;mac_address\n";
+                StringBuilder sbLeitClient = new StringBuilder();
+                sbLeitClient.append(header);
+                for (String l : linhas) sbLeitClient.append(l).append("\n");
+
+                // enviar para client/{idEmpresa}/{dd-MM-yyyy}/
+                carregador.uploadPorEmpresaEDia(idEmpresa, hoje, Map.of(
+                        "LeiturasCLIENT.csv", sbLeitClient.toString()));
+
+                // também enviar erros coletados (se existirem) para client
+                if (!relErros.isEmpty() && !relErros.equals("NumeroLinha;MotivoErro;LinhaOriginal\n")) {
+                    carregador.uploadPorEmpresaEDia(idEmpresa, hoje, Map.of(
+                            "erros_leituras.csv", relErros
+                    ));
                 }
             }
-            System.out.println("Passo 1 concluído. " + dadosMapeados.size() + " leituras validadas.");
 
+            System.out.println("Processamento concluído.");
 
-            System.out.println("Iniciando Passo 2: Lendo e validando " + chaveProcessos);
+            // Inciando conecxão no jira
+            JiraClient jiraClient = new JiraClient(
+                    "https://bitwarepi-1760010438510.atlassian.net",
+                    "bitwarepi@gmail.com",
+                    "ATATT3xFfGF0bZcRrel-kCKKusKH4uywBSqEZFKPthnrXLeTpKd" +
+                            "hips8op9g3Bh_DBjV7f-ISuhE38MX9yExH6Hg_5tIWSEAxrm3O9" +
+                            "gZZm36g2ZBdScIFfMrhqZnCwmkq8a1kxjWWxsCcvmWYOH5E-3fvz" +
+                            "3BjpH5502wl-M_3FoJlBYJhDkJ2fw=BAED5BC2"
+            );
 
-            GetObjectRequest getProcessosRequest = GetObjectRequest.builder()
-                    .bucket(bucketRaw).key(chaveProcessos).build();
+            System.out.println("Buscando chamados pendentes para enviar ao Jira...");
+            List<Map<String, String>> chamados = banco.listarChamadosNaoSincronizados();
 
-            try (ResponseInputStream<GetObjectResponse> s3Stream = s3.getObject(getProcessosRequest);
-                 BufferedReader reader = new BufferedReader(new InputStreamReader(s3Stream, StandardCharsets.UTF_8))) {
+            for (Map<String, String> ch : chamados) {
+                String problema = ch.get("problema");
+                String prioridade = ch.get("prioridade");
+                int idChamado = Integer.parseInt(ch.get("id"));
 
-                String linha;
-                int numeroLinha = 0;
-                while ((linha = reader.readLine()) != null) {
-                    numeroLinha++;
-                    try {
-                        Processos processoValidado = validarProcesso(linha, numeroLinha, dadosMapeados);
-
-                        String chave = processoValidado.getMacAddress() + "_" + processoValidado.getTimestamp();
-                        dadosMapeados.get(chave).adicionarProcesso(processoValidado);
-
-                    } catch (NumberFormatException e) {
-                        String linhaOriginal = linha.replace("\n", " ").replace("\r", " ");
-                        conteudoErrosProcessos.append(numeroLinha).append(";")
-                                .append("Dado não numérico").append(";")
-                                .append(linhaOriginal).append("\n");
-                    } catch (ValidacaoCsvException e) {
-                        System.err.println("ERRO [processos.csv] Linha " + numeroLinha + ": " + e.getMessage());
-                        String linhaOriginal = linha.replace("\n", " ").replace("\r", " ");
-                        conteudoErrosProcessos.append(numeroLinha).append(";")
-                                .append(e.getMessage()).append(";")
-                                .append(linhaOriginal).append("\n");
-                    }
+                if (jiraClient.criarCard(problema, prioridade)) {
+                    banco.marcarChamadoComoSincronizado(idChamado);
+                    System.out.println("Card criado no Jira para chamado ID " + idChamado);
+                } else {
+                    System.out.println("Falha ao criar card no Jira para chamado ID " + idChamado);
                 }
             }
-            System.out.println("Passo 2 concluído. Processos mapeados.");
+            System.out.println("Sincronização dos chamados no banco com o Jira, concluida!");
 
-            System.out.println("Iniciando Passo 3: Gerando CSV de saída com Top 10...");
-
-            conteudoSaidaFinal.append("datetime;mac_address;fk_empresa;os;cpu_maquina_percent;ram_maquina_percent;cpu_maquina_temp;")
-                    .append("processo_id;processo_nome;processo_cpu_uso;processo_memoria_uso\n");
-
-            for (LeituraComProcessos lcp : dadosMapeados.values()) {
-                Leitura leitura = lcp.getLeitura();
-                for (Processos p : lcp.getTop10ProcessosPorCpu()) {
-                    conteudoSaidaFinal.append(leitura.getDatetime()).append(";")
-                            .append(leitura.getMacAddress()).append(";")
-                            .append(leitura.getFkEmpresa()).append(";")
-                            .append(leitura.getOperationSystem()).append(";")
-                            .append(leitura.getCpuPercent()).append(";")
-                            .append(leitura.getRamPercent()).append(";")
-                            .append(leitura.getCpuTemperature()).append(";")
-                            .append(p.getId()).append(";")
-                            .append(p.getNome()).append(";")
-                            .append(p.getUsoCpu()).append(";")
-                            .append(p.getUsoMemoria()).append("\n");
-                }
-            }
-            System.out.println("Passo 3 concluído. CSV de saída gerado.");
-
-            if (conteudoSaidaFinal.length() > 0) {
-                System.out.println("Iniciando upload do arquivo enriquecido para: " + chaveSaidaTrusted);
-                PutObjectRequest putRequest = PutObjectRequest.builder()
-                        .bucket(bucketTrusted).key(chaveSaidaTrusted).contentType("text/csv").build();
-                s3.putObject(putRequest, RequestBody.fromString(conteudoSaidaFinal.toString(), StandardCharsets.UTF_8));
-                System.out.println("Upload do arquivo tratado concluído!");
-            } else {
-                System.out.println("Aviso: Nenhum dado foi processado para o arquivo final.");
-            }
-
-            if (conteudoErrosLeituras.length() > "NumeroLinha;MotivoErro;LinhaOriginal\n".length()) {
-                System.out.println("Iniciando upload do relatório de erros (Leituras) para: " + chaveErrosLeituras);
-                PutObjectRequest putErrosRequest = PutObjectRequest.builder()
-                        .bucket(bucketTrusted).key(chaveErrosLeituras).contentType("text/csv").build();
-                s3.putObject(putErrosRequest, RequestBody.fromString(conteudoErrosLeituras.toString(), StandardCharsets.UTF_8));
-                System.out.println("Upload do relatório de erros (Leituras) concluído!");
-            } else {
-                System.out.println("Nenhum erro de validação encontrado em leituras.csv.");
-            }
-
-            if (conteudoErrosProcessos.length() > "NumeroLinha;MotivoErro;LinhaOriginal\n".length()) {
-                System.out.println("Iniciando upload do relatório de erros (Processos) para: " + chaveErrosProcessos);
-                PutObjectRequest putErrosRequest = PutObjectRequest.builder()
-                        .bucket(bucketTrusted).key(chaveErrosProcessos).contentType("text/csv").build();
-                s3.putObject(putErrosRequest, RequestBody.fromString(conteudoErrosProcessos.toString(), StandardCharsets.UTF_8));
-                System.out.println("Upload do relatório de erros (Processos) concluído!");
-            } else {
-                System.out.println("Nenhum erro de validação encontrado em processos.csv.");
-            }
-
-        } catch (S3Exception e) {
-            System.err.println("Erro do S3: " + e.awsErrorDetails().errorMessage());
-            e.printStackTrace();
-        } catch (IOException e) {
-            System.err.println("Erro de I/O: " + e.getMessage());
-            e.printStackTrace();
         } catch (Exception e) {
-            System.err.println("Ocorreu um erro inesperado: " + e.getMessage());
             e.printStackTrace();
         } finally {
-            if (s3 != null) {
-                s3.close();
-                System.out.println("Cliente S3 fechado.");
-            }
-            if (banco != null) {
-                banco.close();
-            }
+            if (s3 != null) s3.close();
+            if (banco != null) banco.close();
         }
-    }
-
-    private static Leitura validarLeitura(String linha, int numeroLinha, BitwareSQL banco) throws ValidacaoCsvException {
-        if (linha == null || linha.trim().isEmpty()) {
-            throw new ValidacaoCsvException("Linha está totalmente em branco.");
-        }
-
-        String[] campos = linha.split(";", -1);
-
-        if (campos.length != COLUNAS_LEITURA) {
-            throw new ValidacaoCsvException(
-                    "Número incorreto de colunas. Esperado: " + COLUNAS_LEITURA + ", Encontrado: " + campos.length);
-        }
-
-        for (int i = 0; i < campos.length; i++) {
-            if (campos[i] == null || campos[i].trim().isEmpty()) {
-                throw new ValidacaoCsvException("A coluna " + (i + 1) + " está nula ou em branco.");
-            }
-        }
-
-        String macAddress = campos[8];
-        int fkEmpresa = banco.CompararBanco(macAddress);
-        if (fkEmpresa == 0) {
-            throw new ValidacaoCsvException("MAC Address não encontrado no banco de dados: " + macAddress);
-        }
-
-        Leitura leitura = new Leitura(campos);
-        leitura.setFkEmpresa(fkEmpresa);
-        return leitura;
-    }
-
-    private static Processos validarProcesso(String linha, int numeroLinha, Map<String, LeituraComProcessos> mapaLeituras) throws ValidacaoCsvException {
-        if (linha == null || linha.trim().isEmpty()) {
-            throw new ValidacaoCsvException("Linha está totalmente em branco.");
-        }
-
-        String[] campos = linha.split(",", -1);
-
-        if (campos.length != COLUNAS_PROCESSO) {
-            throw new ValidacaoCsvException(
-                    "Número incorreto de colunas. Esperado: " + COLUNAS_PROCESSO + ", Encontrado: " + campos.length);
-        }
-
-        for (int i = 0; i < campos.length; i++) {
-            if (i == 2) continue;
-            if (campos[i] == null || campos[i].trim().isEmpty()) {
-                throw new ValidacaoCsvException("A coluna " + (i + 1) + " está nula ou em branco.");
-            }
-        }
-
-        String macAddress = campos[5];
-        String timestamp = campos[0];
-        String chaveJoin = macAddress + "_" + timestamp;
-
-        if (!mapaLeituras.containsKey(chaveJoin)) {
-            throw new ValidacaoCsvException("Processo órfão (Leitura correspondente não existe ou falhou na validação)");
-        }
-
-        return new Processos(campos);
     }
 }
