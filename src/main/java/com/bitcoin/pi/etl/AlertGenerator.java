@@ -85,29 +85,40 @@ public class AlertGenerator {
         // regra que você ajustou: se uso maior que parametro => "bom" mas se temperatura alta => ruim; se abaixo => ruim
         boolean isTemperature = componente.toLowerCase().contains("temperature");
 
+        String nomeFormatado = formatarComponente(componente);
+
         if (valor > upper) {
-            // para temperaturas, acionar alerta (ruim). para uso (cpu/gpu) é bom, mas você quer ainda registrar?
             String problema;
             String prioridade;
             if (isTemperature) {
-                problema = String.format("%s acima do esperado (valor: %.2f, param: %d)", componente, valor, param);
+                problema = String.format("%s acima do esperado (valor: %.2f, parâmetro: %d)", nomeFormatado, valor, param);
                 prioridade = "Alta";
                 banco.criarChamado(fkMaquina, problema, prioridade, "Aberto", null);
             } else {
-                // uso acima do parametro — bom;
-                problema = String.format("%s acima do parâmetro (valor: %.2f, param: %d) - Atenção", componente, valor, param);
+                problema = String.format("%s acima do parâmetro (valor: %.2f, parâmetro: %d) - Atenção", nomeFormatado, valor, param);
                 prioridade = "Baixa";
                 banco.criarChamado(fkMaquina, problema, prioridade, "Aberto", null);
             }
             if (motivo.length() > 0) motivo.append(" | ");
             motivo.append(problema);
         } else if (valor < lower) {
-            // abaixo do esperado -> ruim
-            String problema = String.format("%s abaixo do esperado (valor: %.2f, param: %d)", componente, valor, param);
+            String problema = String.format("%s abaixo do esperado (valor: %.2f, parâmetro: %d)", nomeFormatado, valor, param);
             String prioridade = isTemperature ? "Alta" : "Média";
             banco.criarChamado(fkMaquina, problema, prioridade, "Aberto", null);
             if (motivo.length() > 0) motivo.append(" | ");
             motivo.append(problema);
         }
+
     }
-}
+
+     private String formatarComponente(String componente) {
+         return switch (componente) {
+             case "cpu_percent" -> "Uso de CPU (%)";
+             case "gpu_percent" -> "Uso de GPU (%)";
+             case "cpu_temperature" -> "Temperatura da CPU (°C)";
+             case "gpu_temperature" -> "Temperatura da GPU (°C)";
+             default -> componente;
+         };
+     }
+
+ }
