@@ -27,12 +27,8 @@ public class ProcessadorS3 {
       
         System.out.println("Cliente S3 iniciado.");
 
-        StringBuilder conteudoSaidaFinal = new StringBuilder();
-        StringBuilder conteudoErrosLeituras = new StringBuilder();
-        Map<String, LeituraComProcessos> dadosMapeados = new HashMap<>();
-        StringBuilder conteudoErrosProcessos = new StringBuilder();
-
         String pathLeiturasRaw = "dados/leituras.csv";
+        String pathProcessosRaw = "dados/processos.csv";
         String pathLeiturasTrusted = "dados/LeiturasTRUSTED.csv";
         String pathErrosLeituras = "dados-erros/erros_leituras.csv";
 
@@ -42,6 +38,9 @@ public class ProcessadorS3 {
 
             System.out.println("Baixando leituras do RAW...");
             List<String> linhasRaw = extrator.baixarArquivo(pathLeiturasRaw);
+
+            System.out.println("Baixando processos do RAW...");
+            List<String> linhasProcessos = extrator.baixarArquivo(pathProcessosRaw);
 
             System.out.println("Tratando leituras (validação)...");
             List<String> linhasValidas = validador.tratarLinhasRaw(linhasRaw);
@@ -95,6 +94,13 @@ public class ProcessadorS3 {
                             "erros_leituras.csv", relErros
                     ));
                 }
+
+                StringBuilder sbProc = new StringBuilder();
+                for (String l : linhasProcessos) sbProc.append(l).append("\n");
+
+                carregador.uploadPorEmpresaEDia(idEmpresa, hoje, Map.of(
+                        "processos.csv", sbProc.toString()
+                ));
             }
 
             System.out.println("Processamento concluído.");
