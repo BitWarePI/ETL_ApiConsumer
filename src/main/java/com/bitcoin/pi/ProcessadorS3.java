@@ -107,12 +107,11 @@ public class ProcessadorS3 {
 
             // Inciando conecxão no jira
             JiraClient jiraClient = new JiraClient(
-                    "https://bitwarepi-1760010438510.atlassian.net",
+                    "https://bitwarepi-1760010438510.atlassian.net/rest/api/3/issue",
                     "bitwarepi@gmail.com",
-                    "ATATT3xFfGF0bZcRrel-kCKKusKH4uywBSqEZFKPthnrXLeTpKd" +
-                            "hips8op9g3Bh_DBjV7f-ISuhE38MX9yExH6Hg_5tIWSEAxrm3O9" +
-                            "gZZm36g2ZBdScIFfMrhqZnCwmkq8a1kxjWWxsCcvmWYOH5E-3fvz" +
-                            "3BjpH5502wl-M_3FoJlBYJhDkJ2fw=BAED5BC2"
+                    "ATATT3xFfGF0K0xx81slFgC5DdDiv8uV4RRE2eMne1Rv-4lFqi2RnPFJBJl1u48v" +
+                            "kVJLVv2oyYD5vJcjcdtuGOQiILPm84CP_j1hic-sjxA9aPiRJY_tmM_aVZ48Js5" +
+                            "vBumc1OcqW4QsLjWdz21rnaF6B8jnxyFyCtCLpffhB3imquDbs1PcCm8=35FCF9C1"
             );
 
             System.out.println("Buscando chamados pendentes para enviar ao Jira...");

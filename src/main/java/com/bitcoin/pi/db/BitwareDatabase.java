@@ -49,10 +49,10 @@ public class BitwareDatabase {
         Integer idComponente = getIdComponenteByDescricao(componenteDescricao);
         if (idComponente == null) return null;
         String sql = "SELECT p.valor\n" +
-                "        FROM empresa e\n" +
-                "        JOIN maquina m ON m.fkEmpresa = e.idEmpresa\n" +
-                "        JOIN parametro p ON p.fkMaquina = m.idMaquina\n" +
-                "        JOIN componente c ON c.idComponente = p.fkComponente\n" +
+                "        FROM Empresa e\n" +
+                "        JOIN Maquina m ON m.fkEmpresa = e.idEmpresa\n" +
+                "        JOIN Parametro p ON p.fkMaquina = m.idMaquina\n" +
+                "        JOIN Componente c ON c.idComponente = p.fkComponente\n" +
                 "        WHERE e.idEmpresa = ? AND m.idMaquina = ? AND c.descricao = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, fkEmpresa);

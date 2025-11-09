@@ -51,7 +51,7 @@ public class JiraClient {
 
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl + "/rest/api/3/issue"))
+                    .uri(URI.create(baseUrl))
                     .header("Authorization", "Basic " + encodedAuth)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(bodyJson))
