@@ -30,7 +30,7 @@ public class BitwareDatabase {
     }
 
     // Retorna idMaquina pelo enderecoMac (ou 0 se não existir)
-    public int getFkMaquinaByMac(String mac) {
+    public int getFkMaquinaPeloMac(String mac) {
         String sql = "SELECT idMaquina FROM Maquina WHERE enderecoMac = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, mac);
@@ -138,6 +138,37 @@ public class BitwareDatabase {
             e.printStackTrace();
         }
         return chamados;
+    }
+
+    public List<Map<String, String>> pegarMacAdresses() {
+        List<Map<String, String>> chamados = new ArrayList<>();
+        String sql = "SELECT idChamado, problema, prioridade FROM Chamado WHERE status = 'Aberto' AND (sincronizado = 0 OR sincronizado IS NULL)";
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Map<String, String> c = new HashMap<>();
+                c.put("id", String.valueOf(rs.getInt("idChamado")));
+                c.put("problema", rs.getString("problema"));
+                c.put("prioridade", rs.getString("prioridade"));
+                chamados.add(c);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return chamados;
+    }
+
+    public int getFkEmpresaPeloMac(String mac) {
+        String sql = "SELECT fkEmpresa FROM Maquina WHERE enderecoMac = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, mac);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0;
     }
 
     public void marcarChamadoComoSincronizado(int idChamado) {
