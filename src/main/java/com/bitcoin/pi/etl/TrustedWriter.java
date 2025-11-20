@@ -18,7 +18,7 @@ public class TrustedWriter {
         this.bucketTrusted = bucketTrusted;
     }
 
-    public void escreverTrusted(String chaveTrusted, List<String> linhasValidas) {
+    public void escreverClient(String chaveTrusted, List<String> linhasValidas) {
         StringBuilder sb = new StringBuilder();
         sb.append(HEADER);
         for (String l : linhasValidas) sb.append(l).append("\n");
