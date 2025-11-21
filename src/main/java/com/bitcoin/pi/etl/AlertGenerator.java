@@ -40,7 +40,7 @@ public class AlertGenerator {
                 String mac = cols[6].trim();
 
                 // recuperar fkMaquina pelo mac (por tabela Maquina)
-                int fkMaquina = banco.getFkMaquinaByMac(mac);
+                int fkMaquina = banco.getFkEmpresaPeloMac(mac);
                 // Permite atualizar objeto strig imutavel "String",
                 // permite modificar o conteúdo sem criar novos objetos
                 StringBuilder motivo = new StringBuilder();
@@ -110,6 +110,54 @@ public class AlertGenerator {
         }
 
     }
+
+     public Map<String, List<String>> pegarLeiturasPorMaquina(List<String> linhasTrusted) {
+
+         Map<String, List<String>> porMac = new HashMap<>();
+         int numeroLinha = 0;
+
+         for (String linha : linhasTrusted) {
+             numeroLinha++;
+             if (numeroLinha == 1) continue; // pular header
+             if (linha == null || linha.trim().isEmpty()) continue;
+
+             String[] cols = linha.split(";", -1);
+             if (cols.length != 7) continue;
+
+             try {
+                 String mac = cols[6].trim();
+
+                 int idEmpresa = Integer.parseInt(cols[0].trim());
+                 String datetime = cols[1].trim();
+                 double cpu = Double.parseDouble(cols[2].trim());
+                 String gpuStr = cols[3].trim();
+                 Double gpu = gpuStr.isEmpty() ? null : Double.parseDouble(gpuStr);
+                 double cpuTemp = Double.parseDouble(cols[4].trim());
+                 String gpuTempStr = cols[5].trim();
+                 Double gpuTemp = gpuTempStr.isEmpty() ? null : Double.parseDouble(gpuTempStr);
+
+
+                 String outLine = String.join(";",
+                         datetime,
+                         String.valueOf(cpu),
+                         (gpu == null ? "" : String.valueOf(gpu)),
+                         String.valueOf(cpuTemp),
+                         (gpuTemp == null ? "" : String.valueOf(gpuTemp)),
+                         String.valueOf(idEmpresa),
+                         mac
+                 );
+
+                 porMac.computeIfAbsent(mac, k -> new ArrayList<>()).add(outLine);
+
+             } catch (Exception ex) {
+                 ex.printStackTrace();
+             }
+         }
+
+         porMac.replaceAll((k, v) -> v.stream().sorted().collect(Collectors.toList()));
+
+         return porMac;
+     }
 
      private String formatarComponente(String componente) {
          return switch (componente) {

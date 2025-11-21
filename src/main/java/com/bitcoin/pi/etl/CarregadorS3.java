@@ -6,6 +6,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 public class CarregadorS3 {
@@ -30,5 +31,20 @@ public class CarregadorS3 {
             System.out.println("Enviado " + chave);
         }
     }
+
+    public void uploadPorMaquina(int idEmpresa, String arquivoNome, String conteudoCsv) {
+        String chave = String.format("%d/maquinas/%s", idEmpresa, arquivoNome);
+
+        PutObjectRequest put = PutObjectRequest.builder()
+                .bucket(bucketClient)
+                .key(chave)
+                .contentType("text/csv")
+                .build();
+
+        s3.putObject(put, RequestBody.fromString(conteudoCsv, StandardCharsets.UTF_8));
+
+        System.out.println("Enviado " + chave);
+    }
+
 
 }

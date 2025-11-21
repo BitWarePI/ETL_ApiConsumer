@@ -131,6 +131,35 @@ public class ProcessadorS3 {
             }
             System.out.println("Sincronização dos chamados no banco com o Jira, concluida!");
 
+            // INDIVIDUAL NICOLAS JAVED
+            Map<String, List<String>> leiturasPorMaquina = alertGenerator.pegarLeiturasPorMaquina(linhasTrusted);
+
+            for (String mac : leiturasPorMaquina.keySet()) {
+
+                List<String> linhas = leiturasPorMaquina.get(mac);
+
+                if (linhas.isEmpty()) continue;
+
+                String[] colsPrimeiraLinha = linhas.get(0).split(";");
+                int idEmpresa = Integer.parseInt(colsPrimeiraLinha[5]);
+
+                StringBuilder sb = new StringBuilder();
+                sb.append("datetime;cpu_percent;gpu_percent;cpu_temperature;gpu_temperature;id_empresa;mac_address\n");
+
+                for (String linha : linhas) {
+                    sb.append(linha).append("\n");
+                }
+
+                String conteudoCsv = sb.toString();
+                String nomeArquivo = mac + ".csv";
+
+                carregador.uploadPorMaquina(idEmpresa, nomeArquivo, conteudoCsv);
+
+                System.out.println("Arquivo gerado e enviado: " + nomeArquivo);
+            }
+
+
+
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
