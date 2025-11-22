@@ -18,9 +18,9 @@ public class ProcessadorS3 {
 
     public static void main(String[] args) {
         Region regiao = Region.US_EAST_1;
-        String bucketRaw = "s3-raw-bitwarepi";
-        String bucketTrusted = "s3-trusted-bitwarepi";
-        String bucketClient = "s3-client-bitwarepi";
+        String bucketRaw = "s3-raw-bitwarepi777";
+        String bucketTrusted = "s3-trusted-bitwarepi777";
+        String bucketClient = "s3-client-bitwarepi777";
 
         S3Client s3 = S3Client.builder().region(regiao).build();
         BitwareDatabase banco = new BitwareDatabase();
@@ -117,21 +117,8 @@ public class ProcessadorS3 {
             System.out.println("Buscando chamados pendentes para enviar ao Jira...");
             List<Map<String, String>> chamados = banco.listarChamadosNaoSincronizados();
 
-            for (Map<String, String> ch : chamados) {
-                String problema = ch.get("problema");
-                String prioridade = ch.get("prioridade");
-                int idChamado = Integer.parseInt(ch.get("id"));
-
-                if (jiraClient.criarCard(problema, prioridade)) {
-                    banco.marcarChamadoComoSincronizado(idChamado);
-                    System.out.println("Card criado no Jira para chamado ID " + idChamado);
-                } else {
-                    System.out.println("Falha ao criar card no Jira para chamado ID " + idChamado);
-                }
-            }
-            System.out.println("Sincronização dos chamados no banco com o Jira, concluida!");
-
             // INDIVIDUAL NICOLAS JAVED
+            //*********************************************************************************************
             Map<String, List<String>> leiturasPorMaquina = alertGenerator.pegarLeiturasPorMaquina(linhasTrusted);
 
             for (String mac : leiturasPorMaquina.keySet()) {
@@ -157,8 +144,20 @@ public class ProcessadorS3 {
 
                 System.out.println("Arquivo gerado e enviado: " + nomeArquivo);
             }
+            //*****************************************************************************
+            for (Map<String, String> ch : chamados) {
+                String problema = ch.get("problema");
+                String prioridade = ch.get("prioridade");
+                int idChamado = Integer.parseInt(ch.get("id"));
 
-
+                if (jiraClient.criarCard(problema, prioridade)) {
+                    banco.marcarChamadoComoSincronizado(idChamado);
+                    System.out.println("Card criado no Jira para chamado ID " + idChamado);
+                } else {
+                    System.out.println("Falha ao criar card no Jira para chamado ID " + idChamado);
+                }
+            }
+            System.out.println("Sincronização dos chamados no banco com o Jira, concluida!");
 
         } catch (Exception e) {
             e.printStackTrace();

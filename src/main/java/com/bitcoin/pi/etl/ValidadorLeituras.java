@@ -1,11 +1,15 @@
 package com.bitcoin.pi.etl;
 
+import com.bitcoin.pi.db.BitwareDatabase;
+import com.sun.tools.jconsole.JConsoleContext;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class ValidadorLeituras {
 
-    private String HEADER = "id_empresa;datetime;cpu_percent;gpu_percent;cpu_temperature;gpu_temperature;mac_address";
+    private BitwareDatabase bd = new BitwareDatabase();
+    private String HEADER = "datetime;cpu_percent;gpu_percent;cpu_temperature;gpu_temperature;mac_address";
     private StringBuilder erros = new StringBuilder("NumeroLinha;MotivoErro;LinhaOriginal\n");
 
     public List<String> tratarLinhasRaw(List<String> linhasRaw) {
@@ -30,24 +34,25 @@ public class ValidadorLeituras {
             }
 
             String[] cols = linha.split(";", -1);
-            if (cols.length != 7) {
+            if (cols.length != 6) {
                 erros.append(numeroLinha).append(";Colunas incorretas (esperado 7);").append(linha).append("\n");
                 continue;
             }
 
             try {
-                String idEmpresa = cols[0].trim();
-                String datetime = cols[1].trim();
-                String cpu = cols[2].trim().replace(",", ".");
-                String gpu = cols[3].trim().replace(",", ".");
-                String cpuTemp = cols[4].trim().replace(",", ".");
-                String gpuTemp = cols[5].trim().replace(",", ".");
-                String mac = cols[6].trim();
+                String datetime = cols[0].trim();
+                String cpu = cols[1].trim().replace(",", ".");
+                String gpu = cols[2].trim().replace(",", ".");
+                String cpuTemp = cols[3].trim().replace(",", ".");
+                String gpuTemp = cols[4].trim().replace(",", ".");
+                String mac = cols[5].trim();
 
-                if (idEmpresa.isEmpty() || datetime.isEmpty() || cpu.isEmpty() || mac.isEmpty()) {
+                if (datetime.isEmpty() || cpu.isEmpty() || mac.isEmpty()) {
                     erros.append(numeroLinha).append(";Campo obrigatório vazio;").append(linha).append("\n");
                     continue;
                 }
+
+                String idEmpresa = bd.getIdEmpresaPorMacAddress(mac).toString();
 
                 // parse numéricos (se falhar -> erro)
                 Double cpuVal = Double.parseDouble(cpu);
@@ -63,7 +68,6 @@ public class ValidadorLeituras {
                 }
 
                 // se chegou aqui => linha válida
-                // Normaliza os valores numéricos (ponto decimal) e compõe linha padrão
                 String normalized = String.join(";", idEmpresa, datetime, cpu, gpu, cpuTemp, gpuTemp, mac);
                 linhasValidas.add(normalized);
 

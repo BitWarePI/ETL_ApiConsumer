@@ -42,14 +42,14 @@ public class AlertGenerator {
                 // recuperar fkMaquina pelo mac (por tabela Maquina)
                 int fkMaquina = banco.getFkEmpresaPeloMac(mac);
                 // Permite atualizar objeto strig imutavel "String",
-                // permite modificar o conteúdo sem criar novos objetos
+                // permite modificar o conteúdo sem criar novos objeto  s
                 StringBuilder motivo = new StringBuilder();
 
                 // checar cada componente (busca usando fkEmpresa)
-                checkAndMaybeCreate(fkMaquina, idEmpresa, "cpu_percent", cpu, mac, motivo);
-                if (gpu != null) checkAndMaybeCreate(fkMaquina, idEmpresa, "gpu_percent", gpu, mac, motivo);
-                checkAndMaybeCreate(fkMaquina, idEmpresa, "cpu_temperature", cpuTemp, mac, motivo);
-                if (gpuTemp != null) checkAndMaybeCreate(fkMaquina, idEmpresa, "gpu_temperature", gpuTemp, mac, motivo);
+                verificarETalvezCriar(fkMaquina, idEmpresa, "cpu_percent", cpu, mac, motivo);
+                if (gpu != null) verificarETalvezCriar(fkMaquina, idEmpresa, "gpu_percent", gpu, mac, motivo);
+                verificarETalvezCriar(fkMaquina, idEmpresa, "cpu_temperature", cpuTemp, mac, motivo);
+                if (gpuTemp != null) verificarETalvezCriar(fkMaquina, idEmpresa, "gpu_temperature", gpuTemp, mac, motivo);
 
                 // montar linha de saída
                 String motivoStr = motivo.length() == 0 ? "" : motivo.toString();
@@ -70,7 +70,7 @@ public class AlertGenerator {
         return porEmpresa;
     }
 
-    private void checkAndMaybeCreate(int fkMaquina, int idEmpresa, String componente, double valor, String mac, StringBuilder motivo) {
+    private void verificarETalvezCriar(int fkMaquina, int idEmpresa, String componente, double valor, String mac, StringBuilder motivo) {
         // tenta pegar parametro por fkMaquina -> se null, busca ParametrosGeraisEmpresa por idEmpresa
         Integer param = banco.getParametro(idEmpresa ,fkMaquina, componente);
         if (param == null) {
@@ -82,7 +82,6 @@ public class AlertGenerator {
         double upper = param * 1.05;
         double lower = param * 0.95;
 
-        // regra que você ajustou: se uso maior que parametro => "bom" mas se temperatura alta => ruim; se abaixo => ruim
         boolean isTemperature = componente.toLowerCase().contains("temperature");
 
         String nomeFormatado = formatarComponente(componente);

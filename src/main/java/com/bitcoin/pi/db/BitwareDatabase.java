@@ -9,8 +9,8 @@ import java.util.Map;
 public class BitwareDatabase {
 
     private static String url = "jdbc:mysql://localhost:3306/bitware_db";
-    private static String user = "root";
-    private static String password = "Home27659317@";
+    private static String user = "bitware";
+    private static String password = "sptech";
 //    private static String url = "jdbc:mysql://54.224.44.26:3306/bitware_db";
 //    private static String user = "bitware";
 //    private static String password = "sptech";
@@ -102,6 +102,17 @@ public class BitwareDatabase {
         String sql = "SELECT idComponente FROM Componente WHERE descricao = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, descricao);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return null;
+    }
+
+    public Integer getIdEmpresaPorMacAddress(String macAddress) {
+        String sql = "SELECT fkEmpresa FROM Maquina WHERE enderecoMac = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, macAddress);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) return rs.getInt(1);
             }
