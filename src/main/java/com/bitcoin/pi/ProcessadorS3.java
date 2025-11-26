@@ -2,25 +2,20 @@ package com.bitcoin.pi;
 
 import com.bitcoin.pi.api.JiraClient;
 import com.bitcoin.pi.db.BitwareDatabase;
-import com.bitcoin.pi.etl.CarregadorS3;
-import com.bitcoin.pi.etl.ExtratorS3;
-import com.bitcoin.pi.etl.AlertGenerator;
-import com.bitcoin.pi.etl.ValidadorLeituras;
-import com.bitcoin.pi.etl.TrustedWriter;
+import com.bitcoin.pi.etl.*;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class ProcessadorS3 {
 
     public static void main(String[] args) {
         Region regiao = Region.US_EAST_1;
-        String bucketRaw = "s3-raw-bitwarepi777";
-        String bucketTrusted = "s3-trusted-bitwarepi777";
-        String bucketClient = "s3-client-bitwarepi777";
+        String bucketRaw = "s3-raw-bitwarepi";
+        String bucketTrusted = "s3-trusted-bitwarepi";
+        String bucketClient = "s3-client-bitwarepi";
 
         S3Client s3 = S3Client.builder().region(regiao).build();
         BitwareDatabase banco = new BitwareDatabase();
@@ -29,6 +24,7 @@ public class ProcessadorS3 {
 
         String pathLeiturasRaw = "dados/leituras.csv";
         String pathProcessosRaw = "dados/processos.csv";
+        String pathHardwareRaw = "dados/hardware.csv";
         String pathLeiturasTrusted = "dados/LeiturasTRUSTED.csv";
         String pathErrosLeituras = "dados-erros/erros_leituras.csv";
 
@@ -41,6 +37,9 @@ public class ProcessadorS3 {
 
             System.out.println("Baixando processos do RAW...");
             List<String> linhasProcessos = extrator.baixarArquivo(pathProcessosRaw);
+
+            System.out.println("Baixando hardware do RAW...");
+            List<String> linhasHardware = extrator.baixarArquivo(pathHardwareRaw);
 
             System.out.println("Tratando leituras (validação)...");
             List<String> linhasValidas = validador.tratarLinhasRaw(linhasRaw);
@@ -74,6 +73,52 @@ public class ProcessadorS3 {
             CarregadorS3 carregador = new CarregadorS3(s3, bucketClient);
             LocalDate hoje = LocalDate.now();
 
+            // INDIVIDUAL AMORIM
+            //*********************************************************************************************
+            System.out.println("Iniciando processamento de Hardware...");
+            Map<Integer, List<String>> hardwarePorEmpresaMap = new HashMap<>();
+
+            if (linhasHardware != null && !linhasHardware.isEmpty()) {
+                // i=1 para pular o cabeçalho original
+                for (int i = 1; i < linhasHardware.size(); i++) {
+                    String linha = linhasHardware.get(i);
+                    String[] dados = linha.split(";");
+
+                    // Estrutura: datetime;macAddress;so... (macAddress é index 1)
+                    if (dados.length > 1) {
+                        String mac = dados[1];
+
+                        // Usa a função existente na sua classe BitwareDatabase
+                        int fkEmpresa = banco.getFkEmpresaPeloMac(mac);
+
+                        if (fkEmpresa > 0) {
+                            // Se a chave ainda não existe no mapa, cria a lista
+                            hardwarePorEmpresaMap.computeIfAbsent(fkEmpresa, k -> new ArrayList<>()).add(linha);
+                        } else {
+                            System.out.println("Aviso: Empresa não encontrada para MAC: " + mac);
+                        }
+                    }
+                }
+            }
+            String headerHardware = "datetime;macAddress;so;qtdRam;cpuCor;qtdGpu;qtdDisco\n";
+
+            for (Map.Entry<Integer, List<String>> entry : hardwarePorEmpresaMap.entrySet()) {
+                Integer idEmpresa = entry.getKey();
+                List<String> linhasDaEmpresa = entry.getValue();
+
+                StringBuilder sbHard = new StringBuilder();
+                sbHard.append(headerHardware);
+                for (String l : linhasDaEmpresa) {
+                    sbHard.append(l).append("\n");
+                }
+
+                // Caminho final será: bucket-client/{idEmpresa}/hardware.csv
+                carregador.uploadPorHardware(idEmpresa, "hardware.csv", sbHard.toString());
+                System.out.println("Hardware enviado para empresa ID " + idEmpresa);
+            }
+            //*********************************************************************************************
+
+
             for (Map.Entry<Integer, List<String>> entry : leiturasPorEmpresa.entrySet()) {
                 Integer idEmpresa = entry.getKey();
                 List<String> linhas = entry.getValue();
@@ -95,6 +140,8 @@ public class ProcessadorS3 {
                     ));
                 }
 
+
+
                 StringBuilder sbProc = new StringBuilder();
                 for (String l : linhasProcessos) sbProc.append(l).append("\n");
 
@@ -109,9 +156,10 @@ public class ProcessadorS3 {
             JiraClient jiraClient = new JiraClient(
                     "https://bitwarepi-1760010438510.atlassian.net/rest/api/3/issue",
                     "bitwarepi@gmail.com",
-                    "ATATT3xFfGF0K0xx81slFgC5DdDiv8uV4RRE2eMne1Rv-4lFqi2RnPFJBJl1u48v" +
-                            "kVJLVv2oyYD5vJcjcdtuGOQiILPm84CP_j1hic-sjxA9aPiRJY_tmM_aVZ48Js5" +
-                            "vBumc1OcqW4QsLjWdz21rnaF6B8jnxyFyCtCLpffhB3imquDbs1PcCm8=35FCF9C1"
+                    "ATATT3xFfGF0F1yyy3bpBGaxxjrH9DFg7vmgu677GAgbv2YGPdoM_9G0KEUREi" +
+                            "dX0NCQuYl0NI1Xz8Q3rUL0FWmLqk5Cr8yi6GXno5mmZF3ernt_RjkQ" +
+                            "h7r6z8WuIzQas35wWoUsNElEiZFSXdRA6G9158VFGo_9ymgyr8yRTr" +
+                            "rVFbcELvUnph4=4141905E"
             );
 
             System.out.println("Buscando chamados pendentes para enviar ao Jira...");
