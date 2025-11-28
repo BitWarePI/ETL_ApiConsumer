@@ -9,7 +9,7 @@ import java.util.Map;
 public class BitwareDatabase {
 
     private static String url = "jdbc:mysql://localhost:3306/bitware_db";
-    private static String user = "bitware";
+    private static String user = "aluno";
     private static String password = "sptech";
 //    private static String url = "jdbc:mysql://54.224.44.26:3306/bitware_db";
 //    private static String user = "bitware";
@@ -192,7 +192,24 @@ public class BitwareDatabase {
         }
     }
 
-    // Individual Isaak
+    // Individual Isaak (Desafio técnico)
+
+    // Busca id's das empresas
+    public List<Integer> listarIdsEmpresas() {
+        List<Integer> lista = new ArrayList<>();
+        String sql = "SELECT idEmpresa FROM Empresa";
+
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                lista.add(rs.getInt("idEmpresa"));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return lista;
+    }
+
     // Buscar ocorrências pelo empresa
     public List<Map<String, String>> buscarOcorrencias(int fkEmpresa){
         List<Map<String, String>> chamados = new ArrayList<>();
@@ -214,24 +231,28 @@ public class BitwareDatabase {
                 "        JOIN\n" +
                 "            Empresa ON Maquina.fkEmpresa = Empresa.idEmpresa\n" +
                 "        WHERE\n" +
-                "            AND Empresa.idEmpresa = ${fkEmpresa}\n" +
+                "            Empresa.idEmpresa = ?\n" +
                 "        ORDER BY\n" +
                 "            Chamado.dataAbertura DESC;";
-        try (PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                Map<String, String> c = new HashMap<>();
-                c.put("idChamado", String.valueOf(rs.getInt("idChamado")));
-                c.put("idEmpresa", String.valueOf(rs.getInt("idEmpresa")));
-                c.put("fkMaquina", String.valueOf(rs.getInt("fkMaquina")));
-                c.put("problema", rs.getString("problema"));
-                c.put("prioridade", rs.getString("prioridade"));
-                c.put("status", rs.getString("status"));
-                c.put("dataAbertura", rs.getString("dataAbertura"));
-                c.put("nomeMaquina", rs.getString("nomeMaquina"));
-                c.put("enderecoMac", rs.getString("enderecoMac"));
-                chamados.add(c);
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, fkEmpresa);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, String> c = new HashMap<>();
+                    c.put("idChamado", String.valueOf(rs.getInt("idChamado")));
+                    c.put("fkMaquina", String.valueOf(rs.getInt("fkMaquina")));
+                    c.put("problema", rs.getString("problema"));
+                    c.put("prioridade", rs.getString("prioridade"));
+                    c.put("status", rs.getString("status"));
+                    c.put("dataAbertura", rs.getString("dataAbertura"));
+                    c.put("nomeMaquina", rs.getString("nomeMaquina"));
+                    c.put("enderecoMac", rs.getString("macMaquina"));
+                    chamados.add(c);
+                }
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
