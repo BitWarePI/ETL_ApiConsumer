@@ -110,7 +110,7 @@ public class AlertGenerator {
 
     }
 
-     public Map<String, List<String>> pegarLeiturasPorMaquina(List<String> linhasTrusted) {
+     public static Map<String, List<String>> pegarLeiturasPorMaquina(List<String> linhasTrusted) {
 
          Map<String, List<String>> porMac = new HashMap<>();
          int numeroLinha = 0;

@@ -193,6 +193,30 @@ public class ProcessadorS3 {
                 System.out.println("Arquivo gerado e enviado: " + nomeArquivo);
             }
             //*****************************************************************************
+
+            // INDIVIDUAL GABRIELA
+            //*********************************************************************************************
+
+            Map<String, List<String[]>> valorPorData = new HashMap<>();
+            //map usa chave e valor(key e values), sempre definido nessa ordem, ex: "idmac": ["","","",""]
+            for (List<String> maquina : leiturasPorMaquina.values()) {
+
+                //valor é cada um dos registros por maquina, de cada valor das 3 em 3 horas ele executa essa funcao
+                for(String valor : maquina){
+                    String[] valores = valor.split(";");
+
+                    //separando por data
+                    List<String[]> dataExiste = valorPorData.get(valores[0]); //datetime é o 0
+                    if(dataExiste == null){
+                        dataExiste = new ArrayList<>();
+                    }
+                    dataExiste.add(valores);
+                    valorPorData.put(valores[0], dataExiste);
+                }
+            }
+
+            //*********************************************************************************************
+
             for (Map<String, String> ch : chamados) {
                 String problema = ch.get("problema");
                 String prioridade = ch.get("prioridade");
