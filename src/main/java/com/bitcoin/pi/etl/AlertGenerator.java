@@ -1,6 +1,7 @@
 package com.bitcoin.pi.etl;
 
 import com.bitcoin.pi.db.BitwareDatabase;
+import software.amazon.awssdk.services.s3.model.CSVOutput;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -168,4 +169,38 @@ public class AlertGenerator {
          };
      }
 
+     // Individual Isaak (Desafio técnico)
+     public Map<Integer, String> gerarCsvChamadosPorEmpresa(BitwareDatabase banco) {
+
+         Map<Integer, String> csvsPorEmpresa = new HashMap<>();
+
+         // 1. Buscar IDs das empresas
+         List<Integer> empresas = banco.listarIdsEmpresas();
+         String header = "idChamado;fkMaquina;nomeMaquina;enderecoMac;prioridade;problema;status;dataAbertura\n";
+
+         for (Integer idEmpresa : empresas) {
+
+             List<Map<String, String>> ocorrencias = banco.buscarOcorrencias(idEmpresa);
+
+             if (ocorrencias.isEmpty()) continue;
+
+             StringBuilder sb = new StringBuilder();
+             sb.append(header);
+
+             for (Map<String, String> o : ocorrencias) {
+                 sb.append(o.get("idChamado")).append(";")
+                         .append(o.get("fkMaquina")).append(";")
+                         .append(o.get("nomeMaquina")).append(";")
+                         .append(o.get("enderecoMac")).append(";")
+                         .append(o.get("prioridade")).append(";")
+                         .append(o.get("problema")).append(";")
+                         .append(o.get("status")).append(";")
+                         .append(o.get("dataAbertura")).append("\n");
+             }
+
+             csvsPorEmpresa.put(idEmpresa, sb.toString());
+         }
+
+         return csvsPorEmpresa;
+     }
  }

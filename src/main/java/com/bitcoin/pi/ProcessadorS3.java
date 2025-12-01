@@ -27,6 +27,7 @@ public class ProcessadorS3 {
         String pathHardwareRaw = "dados/hardware.csv";
         String pathLeiturasTrusted = "dados/LeiturasTRUSTED.csv";
         String pathErrosLeituras = "dados-erros/erros_leituras.csv";
+        String pathChamados = "dados/chamados.csv";
 
         try {
             ExtratorS3 extrator = new ExtratorS3(s3, bucketRaw);
@@ -164,6 +165,27 @@ public class ProcessadorS3 {
 
             System.out.println("Buscando chamados pendentes para enviar ao Jira...");
             List<Map<String, String>> chamados = banco.listarChamadosNaoSincronizados();
+
+
+            // INDIVIDUAL ISAAK (DESAFIO TÉCNICO)
+            //*********************************************************************************************
+            try{
+                AlertGenerator alertas = new AlertGenerator(banco);
+                System.out.println("Gerando CSV de chamados por empresa...");
+                Map<Integer, String> csvChamados = alertas.gerarCsvChamadosPorEmpresa(banco);
+
+                for (Map.Entry<Integer, String> entry : csvChamados.entrySet()) {
+                    int idEmpresa = entry.getKey();
+                    String conteudo = entry.getValue();
+
+                    carregador.uploadChamados(idEmpresa, "chamados.csv", conteudo.toString());
+
+                    System.out.println("Chamados enviados para empresa: " + idEmpresa);
+                }
+            } catch (Exception e){
+                System.out.println(e);
+            }
+            //*********************************************************************************************
 
             // INDIVIDUAL NICOLAS JAVED
             //*********************************************************************************************
