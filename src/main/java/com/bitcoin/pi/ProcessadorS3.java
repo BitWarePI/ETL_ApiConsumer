@@ -3,13 +3,9 @@ package com.bitcoin.pi;
 import com.bitcoin.pi.api.JiraClient;
 import com.bitcoin.pi.db.BitwareDatabase;
 import com.bitcoin.pi.etl.*;
-import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
-import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -17,9 +13,9 @@ public class ProcessadorS3 {
 
     public static void main(String[] args) {
         Region regiao = Region.US_EAST_1;
-        String bucketRaw = "s3-raw-bitwarepi";
-        String bucketTrusted = "s3-trusted-bitwarepi";
-        String bucketClient = "s3-client-bitwarepi";
+        String bucketRaw = "s3-raw-bitwarepi777";
+        String bucketTrusted = "s3-trusted-bitwarepi777";
+        String bucketClient = "s3-client-bitwarepi777";
 
         S3Client s3 = S3Client.builder().region(regiao).build();
         BitwareDatabase banco = new BitwareDatabase();
@@ -128,31 +124,72 @@ public class ProcessadorS3 {
                 Integer idEmpresa = entry.getKey();
                 List<String> linhas = entry.getValue();
 
-                // montar LeiturasCLIENT.csv (cabecalho + linhas com motivo)
+                Map<LocalDate, StringBuilder> arquivosPorData = new HashMap<>();
                 String header = "datetime;cpu_percent;gpu_percent;cpu_temperature;gpu_temperature;motivo_chamado;id_empresa;mac_address\n";
-                StringBuilder sbLeitClient = new StringBuilder();
-                sbLeitClient.append(header);
-                for (String l : linhas) sbLeitClient.append(l).append("\n");
 
-                // enviar para client/{idEmpresa}/{dd-MM-yyyy}/
-                carregador.uploadPorEmpresaEDia(idEmpresa, hoje, Map.of(
-                        "LeiturasCLIENT.csv", sbLeitClient.toString()));
+                for (String l : linhas) {
+                    String dataStr = l.split(";", -1)[0].split(" ")[0];
+                    LocalDate dataLinha = LocalDate.parse(dataStr);
 
-                // também enviar erros coletados (se existirem) para client
-                if (!relErros.isEmpty() && !relErros.equals("NumeroLinha;MotivoErro;LinhaOriginal\n")) {
-                    carregador.uploadPorEmpresaEDia(idEmpresa, hoje, Map.of(
-                            "erros_leituras.csv", relErros
+                    arquivosPorData
+                            .computeIfAbsent(dataLinha, d -> new StringBuilder(header))
+                            .append(l)
+                            .append("\n");
+                }
+
+                // Envia UM arquivo por data
+                for (Map.Entry<LocalDate, StringBuilder> arq : arquivosPorData.entrySet()) {
+                    LocalDate data = arq.getKey();
+                    String conteudo = arq.getValue().toString();
+
+                    carregador.uploadPorEmpresaEDia(idEmpresa, data, Map.of(
+                            "LeiturasCLIENT.csv", conteudo
                     ));
                 }
 
+                if (!relErros.isEmpty() && !relErros.equals("NumeroLinha;MotivoErro;LinhaOriginal\n")) {
 
+                    Map<LocalDate, StringBuilder> errosPorData = new HashMap<>();
 
-                StringBuilder sbProc = new StringBuilder();
-                for (String l : linhasProcessos) sbProc.append(l).append("\n");
+                    for (String errLine : relErros.split("\n")) {
+                        if (errLine.startsWith("NumeroLinha") || errLine.isBlank()) continue;
 
-                carregador.uploadPorEmpresaEDia(idEmpresa, hoje, Map.of(
-                        "processos.csv", sbProc.toString()
-                ));
+                        String[] parts = errLine.split(";", -1);
+                        if (parts.length < 3) continue;
+
+                        // A linha original está na 3ª coluna → pegar a data dela
+                        String linhaOriginal = parts[2];
+                        String dataStr = linhaOriginal.split(";", -1)[0].split(" ")[0];
+                        LocalDate dataErro = LocalDate.parse(dataStr);
+
+                        errosPorData
+                                .computeIfAbsent(dataErro, d -> new StringBuilder("NumeroLinha;MotivoErro;LinhaOriginal\n"))
+                                .append(errLine).append("\n");
+                    }
+
+                    for (Map.Entry<LocalDate, StringBuilder> err : errosPorData.entrySet()) {
+                        carregador.uploadPorEmpresaEDia(idEmpresa, err.getKey(), Map.of(
+                                "erros_leituras.csv", err.getValue().toString()
+                        ));
+                    }
+                }
+
+                Map<LocalDate, StringBuilder> processosPorData = new HashMap<>();
+
+                for (String l : linhasProcessos) {
+                    String dataStr = l.split(";", -1)[0].split(" ")[0];
+                    LocalDate dataProc = LocalDate.parse(dataStr);
+
+                    processosPorData
+                            .computeIfAbsent(dataProc, d -> new StringBuilder())
+                            .append(l).append("\n");
+                }
+
+                for (Map.Entry<LocalDate, StringBuilder> pr : processosPorData.entrySet()) {
+                    carregador.uploadPorEmpresaEDia(idEmpresa, pr.getKey(), Map.of(
+                            "processos.csv", pr.getValue().toString()
+                    ));
+                }
             }
 
             System.out.println("Processamento concluído.");
@@ -223,60 +260,23 @@ public class ProcessadorS3 {
             // INDIVIDUAL GABRIELA
             //*********************************************************************************************
 
-            // AGRUPA POR DATA
             Map<String, List<String[]>> valorPorData = new HashMap<>();
-
+            //map usa chave e valor(key e values), sempre definido nessa ordem, ex: "idmac": ["","","",""]
             for (List<String> maquina : leiturasPorMaquina.values()) {
-                for (String valor : maquina) {
+
+                //valor é cada um dos registros por maquina, de cada valor das 3 em 3 horas ele executa essa funcao
+                for(String valor : maquina){
                     String[] valores = valor.split(";");
 
-                    String data = valores[0].split(" ")[0]; // coluna 1 é datetime
-                    valorPorData.computeIfAbsent(data, x -> new ArrayList<>()).add(valores);
+                    //separando por data
+                    List<String[]> dataExiste = valorPorData.get(valores[0]); //datetime é o 0
+                    if(dataExiste == null){
+                        dataExiste = new ArrayList<>();
+                    }
+                    dataExiste.add(valores);
+                    valorPorData.put(valores[0], dataExiste);
                 }
             }
-
-            // CALCULA MÉDIAS E MONTA CSV!!!!¹¹¹¹
-            StringBuilder csv = new StringBuilder();
-            csv.append("data;cpu;gpu;cpuTemp;gpuTemp\n");
-
-            for (Map.Entry<String, List<String[]>> entry : valorPorData.entrySet()) {
-
-                String data = entry.getKey();
-                List<String[]> dia = entry.getValue();
-
-                double cpu = 0;
-                double gpu = 0;
-                double cpuTemp = 0;
-                double gpuTemp = 0;
-
-                for (String[] dados : dia) {
-                    cpu += Double.parseDouble(dados[1]);
-                    gpu += Double.parseDouble(dados[2]);
-                    cpuTemp += Double.parseDouble(dados[3]);
-                    gpuTemp += Double.parseDouble(dados[4]);
-                }
-
-                int total = dia.size();
-                System.out.println(total + " " + cpu + " " + gpu + " " + gpuTemp  + " "+ cpuTemp + " " + data);
-
-                cpu /= total;
-                gpu /= total;
-                cpuTemp /= total;
-                gpuTemp /= total;
-
-                csv.append(data).append(";")
-                        .append(String.format("%.2f",cpu)).append(";")
-                        .append(String.format("%.2f",gpu)).append(";")
-                        .append(String.format("%.2f",cpuTemp)).append(";")
-                        .append(String.format("%.2f",gpuTemp)).append("\n");
-            }
-
-            // ENVIA PARA O S3!!!¹¹¹¹
-            S3Uploader.enviarCsvParaS3(
-                    "bucket-client-2111",
-                    "medias/medias.csv",
-                    csv.toString()
-            );
 
             //*********************************************************************************************
 
