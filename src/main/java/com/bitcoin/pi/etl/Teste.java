@@ -1,7 +1,12 @@
 package com.bitcoin.pi.etl;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -9,11 +14,11 @@ import java.util.Map;
 
 public class Teste {
     public static void main(String[] args) {
-        List<String>trusted = List.of("""
+        List<String> trusted = List.of("""
 2;2025-05-08 00:00:00;76;78;59.0;50.1;a1:b2:c3:d4:e5:f6
 2;2025-05-08 00:00:00;78;37;68.1;63.6;ff:ee:dd:cc:bb:aa
 2;2025-05-09 00:00:00;47;41;60.8;69.7;e8:5c:5f:1e:b4:1d
-2;2025-05-09 00:00:00;47;45;55.7;56.9;a1:b2:c3:d4:e5:f6
+2;2025-05-09 00:00:00;47;45;55.7;56.9;a1:b2:c3:d4;e5:f6
 2;2025-05-10 00:00:00;78;39;55.9;64.3;ff:ee:dd:cc:bb:aa
 2;2025-05-11 03:00:00;47;68;68.9;52.9;e8:5c:5f:1e:b4:1d
 2;2025-05-11 00:00:00;95;64;60.6;54.1;a1:b2:c3:d4:e5:f6
@@ -38,60 +43,88 @@ public class Teste {
 2;2025-05-23 00:00:00;69;49;74.2;51.5;ff:ee:dd:cc:bb:aa
 2;2025-05-24 00:00:00;66;73;61.1;68.7;e8:5c:5f:1e:b4:1d
 2;2025-05-25 00:00:00;69;49;57.4;52.8;a1:b2:c3:d4:e5:f6
-                """.split("\n"));
+""".split("\n"));
 
+        // LEITURAS POR MÁQUINA
         Map<String, List<String>> leiturasPorMaquina = AlertGenerator.pegarLeiturasPorMaquina(trusted);
 
+        // AGRUPA POR DATA
         Map<String, List<String[]>> valorPorData = new HashMap<>();
-        //map usa chave e valor(key e values), sempre definido nessa ordem, ex: "idmac": ["","","",""]
-        for (List<String> maquina : leiturasPorMaquina.values()) {
 
-            //valor é cada um dos registros por maquina, de cada valor das 3 em 3 horas ele executa essa funcao
-            for(String valor : maquina){
+        for (List<String> maquina : leiturasPorMaquina.values()) {
+            for (String valor : maquina) {
                 String[] valores = valor.split(";");
 
-                String data = valores[0].split(" ")[0];
-                //separando por data
-                List<String[]> dataExiste = valorPorData.get(data); //datetime é o 0
-                if(dataExiste == null){
-                    dataExiste = new ArrayList<>();
-                }
-                dataExiste.add(valores);
-                valorPorData.put(data, dataExiste);
+                String data = valores[0].split(" ")[0]; // coluna 1 é datetime
+                valorPorData.computeIfAbsent(data, x -> new ArrayList<>()).add(valores);
             }
         }
 
-        List<String>file = new ArrayList<>();
-        for(List<String[]> dia : valorPorData.values()){
+        // CALCULA MÉDIAS E MONTA CSV
+        StringBuilder csv = new StringBuilder();
+        csv.append("data;cpu;gpu;cpuTemp;gpuTemp\n");
+
+        for (Map.Entry<String, List<String[]>> entry : valorPorData.entrySet()) {
+
+            String data = entry.getKey();
+            List<String[]> dia = entry.getValue();
+
             double cpu = 0;
             double gpu = 0;
             double cpuTemp = 0;
             double gpuTemp = 0;
 
-            for(String[] dados : dia){
-                cpu += Double.parseDouble(dados[2]);
-                gpu += Double.parseDouble(dados[3]);
-                cpuTemp += Double.parseDouble(dados[4]);
-                gpuTemp += Double.parseDouble(dados[5]);
+            for (String[] dados : dia) {
+                cpu += Double.parseDouble(dados[1]);
+                gpu += Double.parseDouble(dados[2]);
+                cpuTemp += Double.parseDouble(dados[3]);
+                gpuTemp += Double.parseDouble(dados[4]);
             }
-            cpu = cpu / dia.size();
-            gpu = gpu / dia.size();
-            cpuTemp += cpuTemp / dia.size();
-            gpuTemp += gpuTemp / dia.size();
-            String linha = String.join(";",
-                    String.valueOf(cpu),
-                    String.valueOf(gpu),
-                    String.valueOf(cpuTemp),
-                    String.valueOf(gpuTemp)
+
+            int total = dia.size();
+            System.out.println(total + " " + cpu + " " + gpu + " " + gpuTemp  + " "+ cpuTemp + " " + data);
+
+            cpu /= total;
+            gpu /= total;
+            cpuTemp /= total;
+            gpuTemp /= total;
+
+            csv.append(data).append(";")
+                    .append(String.format("%.2f",cpu)).append(";")
+                    .append(String.format("%.2f",gpu)).append(";")
+                    .append(String.format("%.2f",cpuTemp)).append(";")
+                    .append(String.format("%.2f",gpuTemp)).append("\n");
+        }
+
+        // ENVIA PARA O S3
+        S3Uploader.enviarCsvParaS3(
+                "bucket-client-2111",
+                "medias/medias.csv",
+                csv.toString()
+        );
+    }
+
+    public static class S3Uploader {
+
+        public static void enviarCsvParaS3(String bucket, String key, String conteudoCsv) {
+
+            S3Client s3 = S3Client.builder()
+                    .region(Region.US_EAST_1)
+                    .credentialsProvider(ProfileCredentialsProvider.create())
+                    .build();
+
+            PutObjectRequest request = PutObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(key)
+                    .contentType("text/csv")
+                    .build();
+
+            s3.putObject(
+                    request,
+                    RequestBody.fromBytes(conteudoCsv.getBytes(StandardCharsets.UTF_8))
             );
-            file.add(linha);
-        }
 
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(fileName, true))) {
-            writer.write(String.valueOf(file));}
-        catch (Exception e) {
-            throw new RuntimeException(e);
+            System.out.println("CSV enviado com sucesso!!!!!!!!!");
         }
-
     }
 }
