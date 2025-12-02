@@ -11,6 +11,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -78,29 +79,72 @@ public class ProcessadorS3 {
                 Integer idEmpresa = entry.getKey();
                 List<String> linhas = entry.getValue();
 
-                // montar LeiturasCLIENT.csv (cabecalho + linhas com motivo)
+                Map<LocalDate, StringBuilder> arquivosPorData = new HashMap<>();
                 String header = "datetime;cpu_percent;gpu_percent;cpu_temperature;gpu_temperature;motivo_chamado;id_empresa;mac_address\n";
-                StringBuilder sbLeitClient = new StringBuilder();
-                sbLeitClient.append(header);
-                for (String l : linhas) sbLeitClient.append(l).append("\n");
 
-                // enviar para client/{idEmpresa}/{dd-MM-yyyy}/
-                carregador.uploadPorEmpresaEDia(idEmpresa, hoje, Map.of(
-                        "LeiturasCLIENT.csv", sbLeitClient.toString()));
+                for (String l : linhas) {
+                    String dataStr = l.split(";", -1)[0].split(" ")[0];
+                    LocalDate dataLinha = LocalDate.parse(dataStr);
 
-                // também enviar erros coletados (se existirem) para client
-                if (!relErros.isEmpty() && !relErros.equals("NumeroLinha;MotivoErro;LinhaOriginal\n")) {
-                    carregador.uploadPorEmpresaEDia(idEmpresa, hoje, Map.of(
-                            "erros_leituras.csv", relErros
+                    arquivosPorData
+                            .computeIfAbsent(dataLinha, d -> new StringBuilder(header))
+                            .append(l)
+                            .append("\n");
+                }
+
+                // Envia UM arquivo por data
+                for (Map.Entry<LocalDate, StringBuilder> arq : arquivosPorData.entrySet()) {
+                    LocalDate data = arq.getKey();
+                    String conteudo = arq.getValue().toString();
+
+                    carregador.uploadPorEmpresaEDia(idEmpresa, data, Map.of(
+                            "LeiturasCLIENT.csv", conteudo
                     ));
                 }
 
-                StringBuilder sbProc = new StringBuilder();
-                for (String l : linhasProcessos) sbProc.append(l).append("\n");
+                if (!relErros.isEmpty() && !relErros.equals("NumeroLinha;MotivoErro;LinhaOriginal\n")) {
 
-                carregador.uploadPorEmpresaEDia(idEmpresa, hoje, Map.of(
-                        "processos.csv", sbProc.toString()
-                ));
+                    Map<LocalDate, StringBuilder> errosPorData = new HashMap<>();
+
+                    for (String errLine : relErros.split("\n")) {
+                        if (errLine.startsWith("NumeroLinha") || errLine.isBlank()) continue;
+
+                        String[] parts = errLine.split(";", -1);
+                        if (parts.length < 3) continue;
+
+                        // A linha original está na 3ª coluna → pegar a data dela
+                        String linhaOriginal = parts[2];
+                        String dataStr = linhaOriginal.split(";", -1)[0].split(" ")[0];
+                        LocalDate dataErro = LocalDate.parse(dataStr);
+
+                        errosPorData
+                                .computeIfAbsent(dataErro, d -> new StringBuilder("NumeroLinha;MotivoErro;LinhaOriginal\n"))
+                                .append(errLine).append("\n");
+                    }
+
+                    for (Map.Entry<LocalDate, StringBuilder> err : errosPorData.entrySet()) {
+                        carregador.uploadPorEmpresaEDia(idEmpresa, err.getKey(), Map.of(
+                                "erros_leituras.csv", err.getValue().toString()
+                        ));
+                    }
+                }
+
+                Map<LocalDate, StringBuilder> processosPorData = new HashMap<>();
+
+                for (String l : linhasProcessos) {
+                    String dataStr = l.split(";", -1)[0].split(" ")[0];
+                    LocalDate dataProc = LocalDate.parse(dataStr);
+
+                    processosPorData
+                            .computeIfAbsent(dataProc, d -> new StringBuilder())
+                            .append(l).append("\n");
+                }
+
+                for (Map.Entry<LocalDate, StringBuilder> pr : processosPorData.entrySet()) {
+                    carregador.uploadPorEmpresaEDia(idEmpresa, pr.getKey(), Map.of(
+                            "processos.csv", pr.getValue().toString()
+                    ));
+                }
             }
 
             System.out.println("Processamento concluído.");

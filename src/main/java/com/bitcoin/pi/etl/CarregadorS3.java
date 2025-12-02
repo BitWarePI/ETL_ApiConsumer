@@ -22,7 +22,7 @@ public class CarregadorS3 {
 
     // Upload de vários arquivos para client/{idEmpresa}/{dd-MM-yyyy}/nome.csv
     public void uploadPorEmpresaEDia(int idEmpresa, LocalDate data, Map<String, String> arquivosNomeParaConteudo) {
-        String pasta = String.format("%d/%02d-%02d-%04d/", idEmpresa, data.getDayOfMonth(), data.getMonthValue(), data.getYear());
+        String pasta = String.format("%d/datas/%02d-%02d-%04d/", idEmpresa, data.getDayOfMonth(), data.getMonthValue(), data.getYear());
         for (Map.Entry<String,String> kv : arquivosNomeParaConteudo.entrySet()) {
             String chave = pasta + kv.getKey();
             PutObjectRequest put = PutObjectRequest.builder()
