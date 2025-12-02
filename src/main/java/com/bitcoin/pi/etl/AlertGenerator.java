@@ -1,14 +1,15 @@
 package com.bitcoin.pi.etl;
 
 import com.bitcoin.pi.db.BitwareDatabase;
+import software.amazon.awssdk.services.s3.model.CSVOutput;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 
- // Processamento (Trusted): compara com parâmetros e cria chamados no DB.
- // Retorna Map<idEmpresa, List<String>> onde cada String é:
- // datetime;cpu_percent;gpu_percent;cpu_temperature;gpu_temperature;motivo_chamado;id_empresa;mac_address
+// Processamento (Trusted): compara com parâmetros e cria chamados no DB.
+// Retorna Map<idEmpresa, List<String>> onde cada String é:
+// datetime;cpu_percent;gpu_percent;cpu_temperature;gpu_temperature;motivo_chamado;id_empresa;mac_address
 public class AlertGenerator {
 
     private BitwareDatabase banco;
@@ -110,62 +111,96 @@ public class AlertGenerator {
 
     }
 
-     public Map<String, List<String>> pegarLeiturasPorMaquina(List<String> linhasTrusted) {
+    public static Map<String, List<String>> pegarLeiturasPorMaquina(List<String> linhasTrusted) {
 
-         Map<String, List<String>> porMac = new HashMap<>();
-         int numeroLinha = 0;
+        Map<String, List<String>> porMac = new HashMap<>();
+        int numeroLinha = 0;
 
-         for (String linha : linhasTrusted) {
-             numeroLinha++;
-             if (numeroLinha == 1) continue; // pular header
-             if (linha == null || linha.trim().isEmpty()) continue;
+        for (String linha : linhasTrusted) {
+            numeroLinha++;
+            if (numeroLinha == 1) continue; // pular header
+            if (linha == null || linha.trim().isEmpty()) continue;
 
-             String[] cols = linha.split(";", -1);
-             if (cols.length != 7) continue;
+            String[] cols = linha.split(";", -1);
+            if (cols.length != 7) continue;
 
-             try {
-                 String mac = cols[6].trim();
+            try {
+                String mac = cols[6].trim();
 
-                 int idEmpresa = Integer.parseInt(cols[0].trim());
-                 String datetime = cols[1].trim();
-                 double cpu = Double.parseDouble(cols[2].trim());
-                 String gpuStr = cols[3].trim();
-                 Double gpu = gpuStr.isEmpty() ? null : Double.parseDouble(gpuStr);
-                 double cpuTemp = Double.parseDouble(cols[4].trim());
-                 String gpuTempStr = cols[5].trim();
-                 Double gpuTemp = gpuTempStr.isEmpty() ? null : Double.parseDouble(gpuTempStr);
+                int idEmpresa = Integer.parseInt(cols[0].trim());
+                String datetime = cols[1].trim();
+                double cpu = Double.parseDouble(cols[2].trim());
+                String gpuStr = cols[3].trim();
+                Double gpu = gpuStr.isEmpty() ? null : Double.parseDouble(gpuStr);
+                double cpuTemp = Double.parseDouble(cols[4].trim());
+                String gpuTempStr = cols[5].trim();
+                Double gpuTemp = gpuTempStr.isEmpty() ? null : Double.parseDouble(gpuTempStr);
 
 
-                 String outLine = String.join(";",
-                         datetime,
-                         String.valueOf(cpu),
-                         (gpu == null ? "" : String.valueOf(gpu)),
-                         String.valueOf(cpuTemp),
-                         (gpuTemp == null ? "" : String.valueOf(gpuTemp)),
-                         String.valueOf(idEmpresa),
-                         mac
-                 );
+                String outLine = String.join(";",
+                        datetime,
+                        String.valueOf(cpu),
+                        (gpu == null ? "" : String.valueOf(gpu)),
+                        String.valueOf(cpuTemp),
+                        (gpuTemp == null ? "" : String.valueOf(gpuTemp)),
+                        String.valueOf(idEmpresa),
+                        mac
+                );
 
-                 porMac.computeIfAbsent(mac, k -> new ArrayList<>()).add(outLine);
+                porMac.computeIfAbsent(mac, k -> new ArrayList<>()).add(outLine);
 
-             } catch (Exception ex) {
-                 ex.printStackTrace();
-             }
-         }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
 
-         porMac.replaceAll((k, v) -> v.stream().sorted().collect(Collectors.toList()));
+        porMac.replaceAll((k, v) -> v.stream().sorted().collect(Collectors.toList()));
 
-         return porMac;
-     }
+        return porMac;
+    }
 
-     private String formatarComponente(String componente) {
-         return switch (componente) {
-             case "cpu_percent" -> "Uso de CPU (%)";
-             case "gpu_percent" -> "Uso de GPU (%)";
-             case "cpu_temperature" -> "Temperatura da CPU (°C)";
-             case "gpu_temperature" -> "Temperatura da GPU (°C)";
-             default -> componente;
-         };
-     }
+    private String formatarComponente(String componente) {
+        return switch (componente) {
+            case "cpu_percent" -> "Uso de CPU (%)";
+            case "gpu_percent" -> "Uso de GPU (%)";
+            case "cpu_temperature" -> "Temperatura da CPU (°C)";
+            case "gpu_temperature" -> "Temperatura da GPU (°C)";
+            default -> componente;
+        };
+    }
 
- }
+    // Individual Isaak (Desafio técnico)
+    public Map<Integer, String> gerarCsvChamadosPorEmpresa(BitwareDatabase banco) {
+
+        Map<Integer, String> csvsPorEmpresa = new HashMap<>();
+
+        // 1. Buscar IDs das empresas
+        List<Integer> empresas = banco.listarIdsEmpresas();
+        String header = "idChamado;fkMaquina;nomeMaquina;enderecoMac;prioridade;problema;status;dataAbertura\n";
+
+        for (Integer idEmpresa : empresas) {
+
+            List<Map<String, String>> ocorrencias = banco.buscarOcorrencias(idEmpresa);
+
+            if (ocorrencias.isEmpty()) continue;
+
+            StringBuilder sb = new StringBuilder();
+            sb.append(header);
+
+            for (Map<String, String> o : ocorrencias) {
+                sb.append(o.get("idChamado")).append(";")
+                        .append(o.get("fkMaquina")).append(";")
+                        .append(o.get("nomeMaquina")).append(";")
+                        .append(o.get("enderecoMac")).append(";")
+                        .append(o.get("prioridade")).append(";")
+                        .append(o.get("problema")).append(";")
+                        .append(o.get("status")).append(";")
+                        .append(o.get("dataAbertura")).append("\n");
+            }
+
+            csvsPorEmpresa.put(idEmpresa, sb.toString());
+        }
+
+        return csvsPorEmpresa;
+    }
+}

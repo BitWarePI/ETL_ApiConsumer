@@ -92,8 +92,8 @@ public class BitwareDatabase {
     }
 
 
-     // Método que prioriza buscar parâmetro através da fk_empresa
-     // retorna Integer ou null
+    // Método que prioriza buscar parâmetro através da fk_empresa
+    // retorna Integer ou null
     public Integer getParametroByEmpresa(int fkEmpresa, String componenteDescricao) {
         return getParametroGeraisEmpresa(fkEmpresa, componenteDescricao);
     }
@@ -192,4 +192,70 @@ public class BitwareDatabase {
         }
     }
 
+    // Individual Isaak (Desafio técnico)
+
+    // Busca id's das empresas
+    public List<Integer> listarIdsEmpresas() {
+        List<Integer> lista = new ArrayList<>();
+        String sql = "SELECT idEmpresa FROM Empresa";
+
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                lista.add(rs.getInt("idEmpresa"));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return lista;
+    }
+
+    // Buscar ocorrências pelo empresa
+    public List<Map<String, String>> buscarOcorrencias(int fkEmpresa){
+        List<Map<String, String>> chamados = new ArrayList<>();
+        String sql = "SELECT\n" +
+                "            Chamado.idChamado,\n" +
+                "            Chamado.fkMaquina,\n" +
+                "            Chamado.problema,\n" +
+                "            Chamado.prioridade,\n" +
+                "            Chamado.status,\n" +
+                "            Chamado.idTecnico,\n" +
+                "            Chamado.dataAbertura,\n" +
+                "            Chamado.sincronizado,\n" +
+                "            Maquina.nome AS nomeMaquina,\n" +
+                "            Maquina.enderecoMac AS macMaquina\n" +
+                "        FROM\n" +
+                "            Chamado\n" +
+                "        JOIN\n" +
+                "            Maquina ON Chamado.fkMaquina = Maquina.idMaquina\n" +
+                "        JOIN\n" +
+                "            Empresa ON Maquina.fkEmpresa = Empresa.idEmpresa\n" +
+                "        WHERE\n" +
+                "            Empresa.idEmpresa = ?\n" +
+                "        ORDER BY\n" +
+                "            Chamado.dataAbertura DESC;";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, fkEmpresa);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, String> c = new HashMap<>();
+                    c.put("idChamado", String.valueOf(rs.getInt("idChamado")));
+                    c.put("fkMaquina", String.valueOf(rs.getInt("fkMaquina")));
+                    c.put("problema", rs.getString("problema"));
+                    c.put("prioridade", rs.getString("prioridade"));
+                    c.put("status", rs.getString("status"));
+                    c.put("dataAbertura", rs.getString("dataAbertura"));
+                    c.put("nomeMaquina", rs.getString("nomeMaquina"));
+                    c.put("enderecoMac", rs.getString("macMaquina"));
+                    chamados.add(c);
+                }
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return chamados;
+    }
 }

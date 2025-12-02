@@ -2,18 +2,12 @@ package com.bitcoin.pi;
 
 import com.bitcoin.pi.api.JiraClient;
 import com.bitcoin.pi.db.BitwareDatabase;
-import com.bitcoin.pi.etl.CarregadorS3;
-import com.bitcoin.pi.etl.ExtratorS3;
-import com.bitcoin.pi.etl.AlertGenerator;
-import com.bitcoin.pi.etl.ValidadorLeituras;
-import com.bitcoin.pi.etl.TrustedWriter;
+import com.bitcoin.pi.etl.*;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
 import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class ProcessadorS3 {
 
@@ -25,13 +19,15 @@ public class ProcessadorS3 {
 
         S3Client s3 = S3Client.builder().region(regiao).build();
         BitwareDatabase banco = new BitwareDatabase();
-      
+
         System.out.println("Cliente S3 iniciado.");
 
         String pathLeiturasRaw = "dados/leituras.csv";
         String pathProcessosRaw = "dados/processos.csv";
+        String pathHardwareRaw = "dados/hardware.csv";
         String pathLeiturasTrusted = "dados/LeiturasTRUSTED.csv";
         String pathErrosLeituras = "dados-erros/erros_leituras.csv";
+        String pathChamados = "dados/chamados.csv";
 
         try {
             ExtratorS3 extrator = new ExtratorS3(s3, bucketRaw);
@@ -42,6 +38,9 @@ public class ProcessadorS3 {
 
             System.out.println("Baixando processos do RAW...");
             List<String> linhasProcessos = extrator.baixarArquivo(pathProcessosRaw);
+
+            System.out.println("Baixando hardware do RAW...");
+            List<String> linhasHardware = extrator.baixarArquivo(pathHardwareRaw);
 
             System.out.println("Tratando leituras (validação)...");
             List<String> linhasValidas = validador.tratarLinhasRaw(linhasRaw);
@@ -74,6 +73,52 @@ public class ProcessadorS3 {
             // Upload client por empresa(id)/data
             CarregadorS3 carregador = new CarregadorS3(s3, bucketClient);
             LocalDate hoje = LocalDate.now();
+
+            // INDIVIDUAL AMORIM
+            //*********************************************************************************************
+            System.out.println("Iniciando processamento de Hardware...");
+            Map<Integer, List<String>> hardwarePorEmpresaMap = new HashMap<>();
+
+            if (linhasHardware != null && !linhasHardware.isEmpty()) {
+                // i=1 para pular o cabeçalho original
+                for (int i = 1; i < linhasHardware.size(); i++) {
+                    String linha = linhasHardware.get(i);
+                    String[] dados = linha.split(";");
+
+                    // Estrutura: datetime;macAddress;so... (macAddress é index 1)
+                    if (dados.length > 1) {
+                        String mac = dados[1];
+
+                        // Usa a função existente na sua classe BitwareDatabase
+                        int fkEmpresa = banco.getFkEmpresaPeloMac(mac);
+
+                        if (fkEmpresa > 0) {
+                            // Se a chave ainda não existe no mapa, cria a lista
+                            hardwarePorEmpresaMap.computeIfAbsent(fkEmpresa, k -> new ArrayList<>()).add(linha);
+                        } else {
+                            System.out.println("Aviso: Empresa não encontrada para MAC: " + mac);
+                        }
+                    }
+                }
+            }
+            String headerHardware = "datetime;macAddress;so;qtdRam;cpuCor;qtdGpu;qtdDisco\n";
+
+            for (Map.Entry<Integer, List<String>> entry : hardwarePorEmpresaMap.entrySet()) {
+                Integer idEmpresa = entry.getKey();
+                List<String> linhasDaEmpresa = entry.getValue();
+
+                StringBuilder sbHard = new StringBuilder();
+                sbHard.append(headerHardware);
+                for (String l : linhasDaEmpresa) {
+                    sbHard.append(l).append("\n");
+                }
+
+                // Caminho final será: bucket-client/{idEmpresa}/hardware.csv
+                carregador.uploadPorHardware(idEmpresa, "hardware.csv", sbHard.toString());
+                System.out.println("Hardware enviado para empresa ID " + idEmpresa);
+            }
+            //*********************************************************************************************
+
 
             for (Map.Entry<Integer, List<String>> entry : leiturasPorEmpresa.entrySet()) {
                 Integer idEmpresa = entry.getKey();
@@ -153,13 +198,35 @@ public class ProcessadorS3 {
             JiraClient jiraClient = new JiraClient(
                     "https://bitwarepi-1760010438510.atlassian.net/rest/api/3/issue",
                     "bitwarepi@gmail.com",
-                    "ATATT3xFfGF0K0xx81slFgC5DdDiv8uV4RRE2eMne1Rv-4lFqi2RnPFJBJl1u48v" +
-                            "kVJLVv2oyYD5vJcjcdtuGOQiILPm84CP_j1hic-sjxA9aPiRJY_tmM_aVZ48Js5" +
-                            "vBumc1OcqW4QsLjWdz21rnaF6B8jnxyFyCtCLpffhB3imquDbs1PcCm8=35FCF9C1"
+                    "ATATT3xFfGF0F1yyy3bpBGaxxjrH9DFg7vmgu677GAgbv2YGPdoM_9G0KEUREi" +
+                            "dX0NCQuYl0NI1Xz8Q3rUL0FWmLqk5Cr8yi6GXno5mmZF3ernt_RjkQ" +
+                            "h7r6z8WuIzQas35wWoUsNElEiZFSXdRA6G9158VFGo_9ymgyr8yRTr" +
+                            "rVFbcELvUnph4=4141905E"
             );
 
             System.out.println("Buscando chamados pendentes para enviar ao Jira...");
             List<Map<String, String>> chamados = banco.listarChamadosNaoSincronizados();
+
+
+            // INDIVIDUAL ISAAK (DESAFIO TÉCNICO)
+            //*********************************************************************************************
+            try{
+                AlertGenerator alertas = new AlertGenerator(banco);
+                System.out.println("Gerando CSV de chamados por empresa...");
+                Map<Integer, String> csvChamados = alertas.gerarCsvChamadosPorEmpresa(banco);
+
+                for (Map.Entry<Integer, String> entry : csvChamados.entrySet()) {
+                    int idEmpresa = entry.getKey();
+                    String conteudo = entry.getValue();
+
+                    carregador.uploadChamados(idEmpresa, "chamados.csv", conteudo.toString());
+
+                    System.out.println("Chamados enviados para empresa: " + idEmpresa);
+                }
+            } catch (Exception e){
+                System.out.println(e);
+            }
+            //*********************************************************************************************
 
             // INDIVIDUAL NICOLAS JAVED
             //*********************************************************************************************
@@ -189,6 +256,30 @@ public class ProcessadorS3 {
                 System.out.println("Arquivo gerado e enviado: " + nomeArquivo);
             }
             //*****************************************************************************
+
+            // INDIVIDUAL GABRIELA
+            //*********************************************************************************************
+
+            Map<String, List<String[]>> valorPorData = new HashMap<>();
+            //map usa chave e valor(key e values), sempre definido nessa ordem, ex: "idmac": ["","","",""]
+            for (List<String> maquina : leiturasPorMaquina.values()) {
+
+                //valor é cada um dos registros por maquina, de cada valor das 3 em 3 horas ele executa essa funcao
+                for(String valor : maquina){
+                    String[] valores = valor.split(";");
+
+                    //separando por data
+                    List<String[]> dataExiste = valorPorData.get(valores[0]); //datetime é o 0
+                    if(dataExiste == null){
+                        dataExiste = new ArrayList<>();
+                    }
+                    dataExiste.add(valores);
+                    valorPorData.put(valores[0], dataExiste);
+                }
+            }
+
+            //*********************************************************************************************
+
             for (Map<String, String> ch : chamados) {
                 String problema = ch.get("problema");
                 String prioridade = ch.get("prioridade");
