@@ -1,5 +1,7 @@
 package com.bitcoin.pi.etl;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -83,6 +85,12 @@ public class Teste {
                     String.valueOf(gpuTemp)
             );
             file.add(linha);
+        }
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(fileName, true))) {
+            writer.write(String.valueOf(file));}
+        catch (Exception e) {
+            throw new RuntimeException(e);
         }
 
     }

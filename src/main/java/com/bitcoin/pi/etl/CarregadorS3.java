@@ -59,5 +59,17 @@ public class CarregadorS3 {
         System.out.println("Enviado " + chave);
     }
 
+    public void uploadChamados(int idEmpresa, String arquivoNome, String conteudoCsv) {
+        String chave = String.format("%d/%s", idEmpresa, arquivoNome);
 
+        PutObjectRequest put = PutObjectRequest.builder()
+                .bucket(bucketClient)
+                .key(chave)
+                .contentType("text/csv")
+                .build();
+
+        s3.putObject(put, RequestBody.fromString(conteudoCsv, StandardCharsets.UTF_8));
+
+        System.out.println("Enviado " + chave);
+    }
 }

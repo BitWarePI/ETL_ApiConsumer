@@ -28,7 +28,6 @@ public class ExtratorS3 {
     public List<String> baixarArquivoFromBucket(String bucket, String key) throws Exception {
         List<String> linhas = new ArrayList<>();
         GetObjectRequest req = GetObjectRequest.builder().bucket(bucket).key(key).build();
-
         try (ResponseInputStream<GetObjectResponse> s3Stream = s3.getObject(req);
              BufferedReader reader = new BufferedReader(new InputStreamReader(s3Stream, StandardCharsets.UTF_8))) {
             String linha;
