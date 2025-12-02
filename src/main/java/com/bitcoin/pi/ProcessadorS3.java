@@ -11,6 +11,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class ProcessadorS3 {
@@ -223,61 +224,70 @@ public class ProcessadorS3 {
             // INDIVIDUAL GABRIELA
             //*********************************************************************************************
 
-            // AGRUPA POR DATA
-            Map<String, List<String[]>> valorPorData = new HashMap<>();
+            // LEITURAS POR MÁQUINA
+            Map<String, List<String[]>> porEmpresa = new HashMap<>();
 
-            for (List<String> maquina : leiturasPorMaquina.values()) {
-                for (String valor : maquina) {
-                    String[] valores = valor.split(";");
-
-                    String data = valores[0].split(" ")[0]; // coluna 1 é datetime
-                    valorPorData.computeIfAbsent(data, x -> new ArrayList<>()).add(valores);
-                }
+            //esse for faz a ordenação por empresa!!!¹¹¹
+            for (String linha : linhasTrusted) {
+                String[] partes = linha.split(";");
+                String idEmpresa = partes[0];
+                porEmpresa
+                        .computeIfAbsent(idEmpresa, x -> new ArrayList<>()).add(partes);
             }
 
-            // CALCULA MÉDIAS E MONTA CSV!!!!¹¹¹¹
-            StringBuilder csv = new StringBuilder();
-            csv.append("data;cpu;gpu;cpuTemp;gpuTemp\n");
-
-            for (Map.Entry<String, List<String[]>> entry : valorPorData.entrySet()) {
-
-                String data = entry.getKey();
-                List<String[]> dia = entry.getValue();
-
-                double cpu = 0;
-                double gpu = 0;
-                double cpuTemp = 0;
-                double gpuTemp = 0;
-
-                for (String[] dados : dia) {
-                    cpu += Double.parseDouble(dados[1]);
-                    gpu += Double.parseDouble(dados[2]);
-                    cpuTemp += Double.parseDouble(dados[3]);
-                    gpuTemp += Double.parseDouble(dados[4]);
+            for (Map.Entry<String, List<String[]>> entry : porEmpresa.entrySet()){
+                Map<String, List<String[]>> valorPorData = new HashMap<>();
+                for (String[] valores : entry.getValue()) {
+                    String data = valores[1].split(" ")[0]; // coluna 1 é datetime
+                    valorPorData.computeIfAbsent(data, x -> new ArrayList<>()).add(valores); //se n tiver o registro ele cria um
                 }
 
-                int total = dia.size();
-                System.out.println(total + " " + cpu + " " + gpu + " " + gpuTemp  + " "+ cpuTemp + " " + data);
+                StringBuilder csv = new StringBuilder();
+                csv.append("data;cpu;gpu;cpuTemp;gpuTemp\n");
 
-                cpu /= total;
-                gpu /= total;
-                cpuTemp /= total;
-                gpuTemp /= total;
+                //ordena pela data e passa por um foreach, stream e uma funcao usada para arrays, maps e semelhantes
+                valorPorData.entrySet().stream()
+                        .sorted(Comparator.comparing(e -> LocalDate.parse(e.getKey())))
+                        .forEach(entryData -> {
+                            String data = entryData.getKey();
+                            List<String[]> dia = entryData.getValue();
 
-                csv.append(data).append(";")
-                        .append(String.format("%.2f",cpu)).append(";")
-                        .append(String.format("%.2f",gpu)).append(";")
-                        .append(String.format("%.2f",cpuTemp)).append(";")
-                        .append(String.format("%.2f",gpuTemp)).append("\n");
+                            double cpu = 0;
+                            double gpu = 0;
+                            double cpuTemp = 0;
+                            double gpuTemp = 0;
+
+                            for (String[] dados : dia) {
+                                cpu += Double.parseDouble(dados[2]);
+                                gpu += Double.parseDouble(dados[3]);
+                                cpuTemp += Double.parseDouble(dados[4]);
+                                gpuTemp += Double.parseDouble(dados[5]);
+                            }
+
+                            int total = dia.size();
+
+                            cpu /= total;
+                            gpu /= total;
+                            cpuTemp /= total;
+                            gpuTemp /= total;
+
+                            LocalDate d = LocalDate.parse(data); // data = "2025-05-08"
+                            String dataBR = d.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+
+                            csv.append(dataBR).append(";")
+                                    .append(String.format("%.2f",cpu)).append(";")
+                                    .append(String.format("%.2f",gpu)).append(";")
+                                    .append(String.format("%.2f",cpuTemp)).append(";")
+                                    .append(String.format("%.2f",gpuTemp)).append("\n");
+                        });
+
+                // ENVIA PARA O S3
+                S3Uploader.enviarCsvParaS3(
+                        bucketClient,
+                        String.format("%s/medias/medias.csv", entry.getKey()),
+                        csv.toString()
+                );
             }
-
-            // ENVIA PARA O S3!!!¹¹¹¹
-            S3Uploader.enviarCsvParaS3(
-                    "bucket-client-2111",
-                    "medias/medias.csv",
-                    csv.toString()
-            );
-
             //*********************************************************************************************
 
             for (Map<String, String> ch : chamados) {
