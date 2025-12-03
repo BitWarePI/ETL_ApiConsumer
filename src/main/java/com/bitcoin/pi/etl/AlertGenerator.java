@@ -47,10 +47,10 @@ public class AlertGenerator {
                 StringBuilder motivo = new StringBuilder();
 
                 // checar cada componente (busca usando fkEmpresa)
-                verificarETalvezCriar(fkMaquina, idEmpresa, "cpu_percent", cpu, mac, motivo);
-                if (gpu != null) verificarETalvezCriar(fkMaquina, idEmpresa, "gpu_percent", gpu, mac, motivo);
-                verificarETalvezCriar(fkMaquina, idEmpresa, "cpu_temperature", cpuTemp, mac, motivo);
-                if (gpuTemp != null) verificarETalvezCriar(fkMaquina, idEmpresa, "gpu_temperature", gpuTemp, mac, motivo);
+                verificarETalvezCriar(fkMaquina, idEmpresa, "cpu_percent", cpu, mac, motivo, datetime);
+                if (gpu != null) verificarETalvezCriar(fkMaquina, idEmpresa, "gpu_percent", gpu, mac, motivo,  datetime);
+                verificarETalvezCriar(fkMaquina, idEmpresa, "cpu_temperature", cpuTemp, mac, motivo, datetime);
+                if (gpuTemp != null) verificarETalvezCriar(fkMaquina, idEmpresa, "gpu_temperature", gpuTemp, mac, motivo, datetime);
 
                 // montar linha de saída
                 String motivoStr = motivo.length() == 0 ? "" : motivo.toString();
@@ -71,7 +71,7 @@ public class AlertGenerator {
         return porEmpresa;
     }
 
-    private void verificarETalvezCriar(int fkMaquina, int idEmpresa, String componente, double valor, String mac, StringBuilder motivo) {
+    private void verificarETalvezCriar(int fkMaquina, int idEmpresa, String componente, double valor, String mac, StringBuilder motivo, String datetime) {
         // tenta pegar parametro por fkMaquina -> se null, busca ParametrosGeraisEmpresa por idEmpresa
         Integer param = banco.getParametro(idEmpresa ,fkMaquina, componente);
         if (param == null) {
@@ -93,18 +93,18 @@ public class AlertGenerator {
             if (isTemperature) {
                 problema = String.format("%s acima do esperado (valor: %.2f, parâmetro: %d)", nomeFormatado, valor, param);
                 prioridade = "Alta";
-                banco.criarChamado(fkMaquina, problema, prioridade, "Aberto", null);
+                banco.criarChamado(fkMaquina, problema, prioridade, "Aberto", null, datetime);
             } else {
                 problema = String.format("%s acima do parâmetro (valor: %.2f, parâmetro: %d) - Atenção", nomeFormatado, valor, param);
                 prioridade = "Baixa";
-                banco.criarChamado(fkMaquina, problema, prioridade, "Aberto", null);
+                banco.criarChamado(fkMaquina, problema, prioridade, "Aberto", null, datetime);
             }
             if (motivo.length() > 0) motivo.append(" | ");
             motivo.append(problema);
         } else if (valor < lower) {
             String problema = String.format("%s abaixo do esperado (valor: %.2f, parâmetro: %d)", nomeFormatado, valor, param);
             String prioridade = isTemperature ? "Alta" : "Média";
-            banco.criarChamado(fkMaquina, problema, prioridade, "Aberto", null);
+            banco.criarChamado(fkMaquina, problema, prioridade, "Aberto", null,  datetime);
             if (motivo.length() > 0) motivo.append(" | ");
             motivo.append(problema);
         }
