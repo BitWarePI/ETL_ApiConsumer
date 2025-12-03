@@ -4,15 +4,22 @@ import com.bitcoin.pi.api.JiraClient;
 import com.bitcoin.pi.db.BitwareDatabase;
 import com.bitcoin.pi.etl.*;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class ProcessadorS3 {
 
@@ -276,6 +283,41 @@ public class ProcessadorS3 {
                         .computeIfAbsent(idEmpresa, x -> new ArrayList<>()).add(partes);
             }
 
+            String headerTrusted = "id_empresa;datetime;cpu_percent;gpu_percent;cpu_temperature;gpu_temperature;mac_address\n";
+
+            for (Map.Entry<String, List<String[]>> entry : porEmpresa.entrySet()){
+                List<String[]> registrosDaEmpresa = entry.getValue();
+
+                List<String[]> registrosOrdenados = registrosDaEmpresa.stream()
+                        .sorted(Comparator.comparing(valores -> {
+                            try {
+                                return LocalDateTime.parse(valores[0], DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                            } catch (Exception e) {
+                                return LocalDateTime.MIN;
+                            }
+                        }))
+                        .collect(Collectors.toList());
+
+                StringBuilder csvOrdenado = new StringBuilder();
+                csvOrdenado.append(headerTrusted);
+
+                for (String[] valores : registrosOrdenados) {
+                    String linha = String.join(";", valores);
+                    csvOrdenado.append(linha).append("\n");
+                }
+
+                try {
+                    S3Uploader.enviarCsvParaS3(
+                            bucketClient,
+                            String.format("%s/leiturasFormatadas/leituras.csv", entry.getKey()),
+                            csvOrdenado.toString()
+                    );
+                    System.out.println("Arquivo ordenado e enviado");
+                } catch (NumberFormatException e) {
+                    System.err.println("NÃO ENVIOU :(((( ");
+                }
+            }
+
             for (Map.Entry<String, List<String[]>> entry : porEmpresa.entrySet()){
                 Map<String, List<String[]>> valorPorData = new HashMap<>();
                 for (String[] valores : entry.getValue()) {
@@ -328,6 +370,8 @@ public class ProcessadorS3 {
                         String.format("%s/medias/medias.csv", entry.getKey()),
                         csv.toString()
                 );
+
+
             }
             //*********************************************************************************************
 
