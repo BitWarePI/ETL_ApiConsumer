@@ -121,14 +121,15 @@ public class BitwareDatabase {
     }
 
     // Cria chamado no banco; idTecnico pode ser null.
-    public void criarChamado(int fkMaquina, String problema, String prioridade, String status, Integer idTecnico) {
-        String sql = "INSERT INTO Chamado (fkMaquina, problema, prioridade, status, idTecnico) VALUES (?, ?, ?, ?, ?)";
+    public void criarChamado(int fkMaquina, String problema, String prioridade, String status, Integer idTecnico, String datetime) {
+        String sql = "INSERT INTO Chamado (fkMaquina, problema, prioridade, status, idTecnico, dataAbertura) VALUES (?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, fkMaquina);
             ps.setString(2, problema);
             ps.setString(3, prioridade);
             ps.setString(4, status);
             if (idTecnico == null) ps.setNull(5, Types.INTEGER); else ps.setInt(5, idTecnico);
+            ps.setString(6, datetime);
             ps.executeUpdate();
         } catch (SQLException e) { e.printStackTrace(); }
     }
