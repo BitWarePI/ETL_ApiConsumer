@@ -9,8 +9,8 @@ import java.util.Map;
 public class BitwareDatabase {
 
     private static String url = "jdbc:mysql://localhost:3306/bitware_db";
-    private static String user = "bitware";
-    private static String password = "sptech";
+    private static String user = "aluno";
+    private static String password = "123456";
 //    private static String url = "jdbc:mysql://54.224.44.26:3306/bitware_db";
 //    private static String user = "bitware";
 //    private static String password = "sptech";
@@ -121,7 +121,7 @@ public class BitwareDatabase {
     }
 
     // Cria chamado no banco; idTecnico pode ser null.
-    public void criarChamado(int fkMaquina, String problema, String prioridade, String status, Integer idTecnico, String datetime) {
+    public void criarChamado(int fkMaquina, String problema, String prioridade, String status, Integer idTecnico, String datetimeCsv) {
         String sql = "INSERT INTO Chamado (fkMaquina, problema, prioridade, status, idTecnico, dataAbertura) VALUES (?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, fkMaquina);
@@ -129,7 +129,7 @@ public class BitwareDatabase {
             ps.setString(3, prioridade);
             ps.setString(4, status);
             if (idTecnico == null) ps.setNull(5, Types.INTEGER); else ps.setInt(5, idTecnico);
-            ps.setString(6, datetime);
+            ps.setString(6, datetimeCsv);
             ps.executeUpdate();
         } catch (SQLException e) { e.printStackTrace(); }
     }

@@ -4,23 +4,30 @@ import com.bitcoin.pi.api.JiraClient;
 import com.bitcoin.pi.db.BitwareDatabase;
 import com.bitcoin.pi.etl.*;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class ProcessadorS3 {
 
     public static void main(String[] args) {
         Region regiao = Region.US_EAST_1;
-        String bucketRaw = "s3-raw-bitwarepi";
-        String bucketTrusted = "s3-trusted-bitwarepi";
-        String bucketClient = "s3-client-bitwarepi";
+        String bucketRaw = "s3-raw-bitwarepi-isaak";
+        String bucketTrusted = "s3-trusted-bitwarepi-isaak";
+        String bucketClient = "s3-client-bitwarepi-isaak";
 
         S3Client s3 = S3Client.builder().region(regiao).build();
         BitwareDatabase banco = new BitwareDatabase();
@@ -129,31 +136,72 @@ public class ProcessadorS3 {
                 Integer idEmpresa = entry.getKey();
                 List<String> linhas = entry.getValue();
 
-                // montar LeiturasCLIENT.csv (cabecalho + linhas com motivo)
+                Map<LocalDate, StringBuilder> arquivosPorData = new HashMap<>();
                 String header = "datetime;cpu_percent;gpu_percent;cpu_temperature;gpu_temperature;motivo_chamado;id_empresa;mac_address\n";
-                StringBuilder sbLeitClient = new StringBuilder();
-                sbLeitClient.append(header);
-                for (String l : linhas) sbLeitClient.append(l).append("\n");
 
-                // enviar para client/{idEmpresa}/{dd-MM-yyyy}/
-                carregador.uploadPorEmpresaEDia(idEmpresa, hoje, Map.of(
-                        "LeiturasCLIENT.csv", sbLeitClient.toString()));
+                for (String l : linhas) {
+                    String dataStr = l.split(";", -1)[0].split(" ")[0];
+                    LocalDate dataLinha = LocalDate.parse(dataStr);
 
-                // também enviar erros coletados (se existirem) para client
-                if (!relErros.isEmpty() && !relErros.equals("NumeroLinha;MotivoErro;LinhaOriginal\n")) {
-                    carregador.uploadPorEmpresaEDia(idEmpresa, hoje, Map.of(
-                            "erros_leituras.csv", relErros
+                    arquivosPorData
+                            .computeIfAbsent(dataLinha, d -> new StringBuilder(header))
+                            .append(l)
+                            .append("\n");
+                }
+
+                // Envia UM arquivo por data
+                for (Map.Entry<LocalDate, StringBuilder> arq : arquivosPorData.entrySet()) {
+                    LocalDate data = arq.getKey();
+                    String conteudo = arq.getValue().toString();
+
+                    carregador.uploadPorEmpresaEDia(idEmpresa, data, Map.of(
+                            "LeiturasCLIENT.csv", conteudo
                     ));
                 }
 
+                if (!relErros.isEmpty() && !relErros.equals("NumeroLinha;MotivoErro;LinhaOriginal\n")) {
 
+                    Map<LocalDate, StringBuilder> errosPorData = new HashMap<>();
 
-                StringBuilder sbProc = new StringBuilder();
-                for (String l : linhasProcessos) sbProc.append(l).append("\n");
+                    for (String errLine : relErros.split("\n")) {
+                        if (errLine.startsWith("NumeroLinha") || errLine.isBlank()) continue;
 
-                carregador.uploadPorEmpresaEDia(idEmpresa, hoje, Map.of(
-                        "processos.csv", sbProc.toString()
-                ));
+                        String[] parts = errLine.split(";", -1);
+                        if (parts.length < 3) continue;
+
+                        // A linha original está na 3ª coluna → pegar a data dela
+                        String linhaOriginal = parts[2];
+                        String dataStr = linhaOriginal.split(";", -1)[0].split(" ")[0];
+                        LocalDate dataErro = LocalDate.parse(dataStr);
+
+                        errosPorData
+                                .computeIfAbsent(dataErro, d -> new StringBuilder("NumeroLinha;MotivoErro;LinhaOriginal\n"))
+                                .append(errLine).append("\n");
+                    }
+
+                    for (Map.Entry<LocalDate, StringBuilder> err : errosPorData.entrySet()) {
+                        carregador.uploadPorEmpresaEDia(idEmpresa, err.getKey(), Map.of(
+                                "erros_leituras.csv", err.getValue().toString()
+                        ));
+                    }
+                }
+
+                Map<LocalDate, StringBuilder> processosPorData = new HashMap<>();
+
+                for (String l : linhasProcessos) {
+                    String dataStr = l.split(";", -1)[0].split(" ")[0];
+                    LocalDate dataProc = LocalDate.parse(dataStr);
+
+                    processosPorData
+                            .computeIfAbsent(dataProc, d -> new StringBuilder())
+                            .append(l).append("\n");
+                }
+
+                for (Map.Entry<LocalDate, StringBuilder> pr : processosPorData.entrySet()) {
+                    carregador.uploadPorEmpresaEDia(idEmpresa, pr.getKey(), Map.of(
+                            "processos.csv", pr.getValue().toString()
+                    ));
+                }
             }
 
             System.out.println("Processamento concluído.");
@@ -235,6 +283,41 @@ public class ProcessadorS3 {
                         .computeIfAbsent(idEmpresa, x -> new ArrayList<>()).add(partes);
             }
 
+            String headerTrusted = "id_empresa;datetime;cpu_percent;gpu_percent;cpu_temperature;gpu_temperature;mac_address\n";
+
+            for (Map.Entry<String, List<String[]>> entry : porEmpresa.entrySet()){
+                List<String[]> registrosDaEmpresa = entry.getValue();
+
+                List<String[]> registrosOrdenados = registrosDaEmpresa.stream()
+                        .sorted(Comparator.comparing(valores -> {
+                            try {
+                                return LocalDateTime.parse(valores[0], DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                            } catch (Exception e) {
+                                return LocalDateTime.MIN;
+                            }
+                        }))
+                        .collect(Collectors.toList());
+
+                StringBuilder csvOrdenado = new StringBuilder();
+                csvOrdenado.append(headerTrusted);
+
+                for (String[] valores : registrosOrdenados) {
+                    String linha = String.join(";", valores);
+                    csvOrdenado.append(linha).append("\n");
+                }
+
+                try {
+                    S3Uploader.enviarCsvParaS3(
+                            bucketClient,
+                            String.format("%s/leiturasFormatadas/leituras.csv", entry.getKey()),
+                            csvOrdenado.toString()
+                    );
+                    System.out.println("Arquivo ordenado e enviado");
+                } catch (NumberFormatException e) {
+                    System.err.println("NÃO ENVIOU :(((( ");
+                }
+            }
+
             for (Map.Entry<String, List<String[]>> entry : porEmpresa.entrySet()){
                 Map<String, List<String[]>> valorPorData = new HashMap<>();
                 for (String[] valores : entry.getValue()) {
@@ -287,6 +370,8 @@ public class ProcessadorS3 {
                         String.format("%s/medias/medias.csv", entry.getKey()),
                         csv.toString()
                 );
+
+
             }
             //*********************************************************************************************
 

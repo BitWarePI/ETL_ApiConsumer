@@ -48,7 +48,7 @@ public class AlertGenerator {
 
                 // checar cada componente (busca usando fkEmpresa)
                 verificarETalvezCriar(fkMaquina, idEmpresa, "cpu_percent", cpu, mac, motivo, datetime);
-                if (gpu != null) verificarETalvezCriar(fkMaquina, idEmpresa, "gpu_percent", gpu, mac, motivo, datetime);
+                if (gpu != null) verificarETalvezCriar(fkMaquina, idEmpresa, "gpu_percent", gpu, mac, motivo,  datetime);
                 verificarETalvezCriar(fkMaquina, idEmpresa, "cpu_temperature", cpuTemp, mac, motivo, datetime);
                 if (gpuTemp != null) verificarETalvezCriar(fkMaquina, idEmpresa, "gpu_temperature", gpuTemp, mac, motivo, datetime);
 
@@ -104,7 +104,7 @@ public class AlertGenerator {
         } else if (valor < lower) {
             String problema = String.format("%s abaixo do esperado (valor: %.2f, parâmetro: %d)", nomeFormatado, valor, param);
             String prioridade = isTemperature ? "Alta" : "Média";
-            banco.criarChamado(fkMaquina, problema, prioridade, "Aberto", null, datetime);
+            banco.criarChamado(fkMaquina, problema, prioridade, "Aberto", null,  datetime);
             if (motivo.length() > 0) motivo.append(" | ");
             motivo.append(problema);
         }
