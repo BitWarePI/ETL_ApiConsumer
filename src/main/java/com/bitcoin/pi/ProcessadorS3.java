@@ -3,19 +3,24 @@ package com.bitcoin.pi;
 import com.bitcoin.pi.api.JiraClient;
 import com.bitcoin.pi.db.BitwareDatabase;
 import com.bitcoin.pi.etl.*;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class ProcessadorS3 {
 
     public static void main(String[] args) {
         Region regiao = Region.US_EAST_1;
-        String bucketRaw = "s3-raw-bitwarepi-isaak";
-        String bucketTrusted = "s3-trusted-bitwarepi-isaak";
-        String bucketClient = "s3-client-bitwarepi-isaak";
+        String bucketRaw = "s3-raw-bitwarepi";
+        String bucketTrusted = "s3-trusted-bitwarepi";
+        String bucketClient = "s3-client-bitwarepi";
 
         S3Client s3 = S3Client.builder().region(regiao).build();
         BitwareDatabase banco = new BitwareDatabase();
@@ -260,24 +265,70 @@ public class ProcessadorS3 {
             // INDIVIDUAL GABRIELA
             //*********************************************************************************************
 
-            Map<String, List<String[]>> valorPorData = new HashMap<>();
-            //map usa chave e valor(key e values), sempre definido nessa ordem, ex: "idmac": ["","","",""]
-            for (List<String> maquina : leiturasPorMaquina.values()) {
+            // LEITURAS POR MÁQUINA
+            Map<String, List<String[]>> porEmpresa = new HashMap<>();
 
-                //valor é cada um dos registros por maquina, de cada valor das 3 em 3 horas ele executa essa funcao
-                for(String valor : maquina){
-                    String[] valores = valor.split(";");
-
-                    //separando por data
-                    List<String[]> dataExiste = valorPorData.get(valores[0]); //datetime é o 0
-                    if(dataExiste == null){
-                        dataExiste = new ArrayList<>();
-                    }
-                    dataExiste.add(valores);
-                    valorPorData.put(valores[0], dataExiste);
-                }
+            //esse for faz a ordenação por empresa!!!¹¹¹
+            for (String linha : linhasTrusted) {
+                String[] partes = linha.split(";");
+                String idEmpresa = partes[0];
+                porEmpresa
+                        .computeIfAbsent(idEmpresa, x -> new ArrayList<>()).add(partes);
             }
 
+            for (Map.Entry<String, List<String[]>> entry : porEmpresa.entrySet()){
+                Map<String, List<String[]>> valorPorData = new HashMap<>();
+                for (String[] valores : entry.getValue()) {
+                    String data = valores[1].split(" ")[0]; // coluna 1 é datetime
+                    valorPorData.computeIfAbsent(data, x -> new ArrayList<>()).add(valores); //se n tiver o registro ele cria um
+                }
+
+                StringBuilder csv = new StringBuilder();
+                csv.append("data;cpu;gpu;cpuTemp;gpuTemp\n");
+
+                //ordena pela data e passa por um foreach, stream e uma funcao usada para arrays, maps e semelhantes
+                valorPorData.entrySet().stream()
+                        .sorted(Comparator.comparing(e -> LocalDate.parse(e.getKey())))
+                        .forEach(entryData -> {
+                            String data = entryData.getKey();
+                            List<String[]> dia = entryData.getValue();
+
+                            double cpu = 0;
+                            double gpu = 0;
+                            double cpuTemp = 0;
+                            double gpuTemp = 0;
+
+                            for (String[] dados : dia) {
+                                cpu += Double.parseDouble(dados[2]);
+                                gpu += Double.parseDouble(dados[3]);
+                                cpuTemp += Double.parseDouble(dados[4]);
+                                gpuTemp += Double.parseDouble(dados[5]);
+                            }
+
+                            int total = dia.size();
+
+                            cpu /= total;
+                            gpu /= total;
+                            cpuTemp /= total;
+                            gpuTemp /= total;
+
+                            LocalDate d = LocalDate.parse(data); // data = "2025-05-08"
+                            String dataBR = d.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+
+                            csv.append(dataBR).append(";")
+                                    .append(String.format("%.2f",cpu)).append(";")
+                                    .append(String.format("%.2f",gpu)).append(";")
+                                    .append(String.format("%.2f",cpuTemp)).append(";")
+                                    .append(String.format("%.2f",gpuTemp)).append("\n");
+                        });
+
+                // ENVIA PARA O S3
+                S3Uploader.enviarCsvParaS3(
+                        bucketClient,
+                        String.format("%s/medias/medias.csv", entry.getKey()),
+                        csv.toString()
+                );
+            }
             //*********************************************************************************************
 
             for (Map<String, String> ch : chamados) {
