@@ -9,8 +9,8 @@ import java.util.Map;
 public class BitwareDatabase {
 
     private static String url = "jdbc:mysql://localhost:3306/bitware_db";
-    private static String user = "root";
-    private static String password = "28022007";
+    private static String user = "aluno";
+    private static String password = "123456";
 //    private static String url = "jdbc:mysql://54.224.44.26:3306/bitware_db";
 //    private static String user = "bitware";
 //    private static String password = "sptech";
