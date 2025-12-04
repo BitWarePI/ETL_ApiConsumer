@@ -318,17 +318,24 @@ public class ProcessadorS3 {
                 }
             }
 
-            for (Map.Entry<String, List<String[]>> entry : porEmpresa.entrySet()){
+            for (Map.Entry<String, List<String[]>> entry : porEmpresa.entrySet()) {
+
                 Map<String, List<String[]>> valorPorData = new HashMap<>();
+
                 for (String[] valores : entry.getValue()) {
-                    String data = valores[1].split(" ")[0]; // coluna 1 é datetime
-                    valorPorData.computeIfAbsent(data, x -> new ArrayList<>()).add(valores); //se n tiver o registro ele cria um
+                    if (valores[1].equalsIgnoreCase("datetime")) {
+                        continue;
+                    }
+
+                    String data = valores[1].split(" ")[0];
+                    valorPorData
+                            .computeIfAbsent(data, x -> new ArrayList<>())
+                            .add(valores);
                 }
 
                 StringBuilder csv = new StringBuilder();
                 csv.append("data;cpu;gpu;cpuTemp;gpuTemp\n");
 
-                //ordena pela data e passa por um foreach, stream e uma funcao usada para arrays, maps e semelhantes
                 valorPorData.entrySet().stream()
                         .sorted(Comparator.comparing(e -> LocalDate.parse(e.getKey())))
                         .forEach(entryData -> {
@@ -354,17 +361,17 @@ public class ProcessadorS3 {
                             cpuTemp /= total;
                             gpuTemp /= total;
 
-                            LocalDate d = LocalDate.parse(data); // data = "2025-05-08"
+                            LocalDate d = LocalDate.parse(data);
                             String dataBR = d.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
 
                             csv.append(dataBR).append(";")
-                                    .append(String.format("%.2f",cpu)).append(";")
-                                    .append(String.format("%.2f",gpu)).append(";")
-                                    .append(String.format("%.2f",cpuTemp)).append(";")
-                                    .append(String.format("%.2f",gpuTemp)).append("\n");
+                                    .append(String.format("%.2f", cpu)).append(";")
+                                    .append(String.format("%.2f", gpu)).append(";")
+                                    .append(String.format("%.2f", cpuTemp)).append(";")
+                                    .append(String.format("%.2f", gpuTemp)).append("\n");
                         });
 
-                // ENVIA PARA O S3
+            // ENVIA PARA O S3
                 S3Uploader.enviarCsvParaS3(
                         bucketClient,
                         String.format("%s/medias/medias.csv", entry.getKey()),
