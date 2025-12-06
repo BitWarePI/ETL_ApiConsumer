@@ -41,7 +41,7 @@ public class AlertGenerator {
                 String mac = cols[6].trim();
 
                 // recuperar fkMaquina pelo mac (por tabela Maquina)
-                int fkMaquina = banco.getFkEmpresaPeloMac(mac);
+                int fkMaquina = banco.getFkMaquinaPeloMac(mac);
                 // Permite atualizar objeto strig imutavel "String",
                 // permite modificar o conteúdo sem criar novos objeto  s
                 StringBuilder motivo = new StringBuilder();

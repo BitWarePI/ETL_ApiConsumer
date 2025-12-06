@@ -25,9 +25,9 @@ public class ProcessadorS3 {
 
     public static void main(String[] args) {
         Region regiao = Region.US_EAST_1;
-        String bucketRaw = "s3-raw-bitwarepi-isaak";
-        String bucketTrusted = "s3-trusted-bitwarepi-isaak";
-        String bucketClient = "s3-client-bitwarepi-isaak";
+        String bucketRaw = "s3-raw-bitwarepi777";
+        String bucketTrusted = "s3-trusted-bitwarepi777";
+        String bucketClient = "s3-client-bitwarepi777";
 
         S3Client s3 = S3Client.builder().region(regiao).build();
         BitwareDatabase banco = new BitwareDatabase();
