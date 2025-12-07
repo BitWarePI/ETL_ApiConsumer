@@ -25,9 +25,9 @@ public class ProcessadorS3 {
 
     public static void main(String[] args) {
         Region regiao = Region.US_EAST_1;
-        String bucketRaw = "s3-raw-bitwarepi-isaak";
-        String bucketTrusted = "s3-trusted-bitwarepi-isaak";
-        String bucketClient = "s3-client-bitwarepi-isaak";
+        String bucketRaw = "s3-raw-bitwarepi";
+        String bucketTrusted = "s3-trusted-bitwarepi";
+        String bucketClient = "s3-client-bitwarepi";
 
         S3Client s3 = S3Client.builder().region(regiao).build();
         BitwareDatabase banco = new BitwareDatabase();
@@ -113,7 +113,7 @@ public class ProcessadorS3 {
                     }
                 }
             }
-            String headerHardware = "datetime;macAddress;so;qtdRam;cpuCor;qtdGpu;qtdDisco\n";
+            String headerHardware = "datetime;macAddress;so;qtdRam;cpuCor;qtdGpu;qtdDisco;ipPublico\n";
 
             for (Map.Entry<Integer, List<String>> entry : hardwarePorEmpresaMap.entrySet()) {
                 Integer idEmpresa = entry.getKey();
